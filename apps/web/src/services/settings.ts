@@ -59,7 +59,8 @@ const initialLocale = (): Locale => {
   if (saved === 'zh-CN' || saved === 'en-US') {
     return saved
   }
-  return isChineseBrowser() ? 'zh-CN' : 'en-US'
+  // AI Homework: English by default; 中文 can be chosen on the sign-in and account pages
+  return 'en-US'
 }
 
 const initialLocation = (): UserLocation | null => {

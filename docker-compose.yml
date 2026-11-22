@@ -1,0 +1,47 @@
+# Local setup: Postgres + the app (web pages and API on http://localhost:8787).
+#
+#   docker compose up -d --build
+#   docker compose exec app ai-homework seed     # demo accounts, password demo1234
+#
+# Settings such as DEEPSEEK_API_KEY are read from a .env file next to this one (see .env.example).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: homework
+      POSTGRES_PASSWORD: homework
+      POSTGRES_DB: homework
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # Only reachable from this machine; lets `cargo run` use the same database during development.
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homework -d homework"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://homework:homework@db:5432/homework
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
+      # Plain http on localhost needs non-secure cookies; set to true behind HTTPS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
+    ports:
+      - "8787:8787"
+    volumes:
+      - uploads:/data
+
+volumes:
+  db-data:
+  uploads:

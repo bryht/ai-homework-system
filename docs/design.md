@@ -9,13 +9,15 @@
 | 用户在哪里 | 海外 | 可以用海外的托管数据库和模型 API；不考虑国内备案和数据出境 |
 | 规模 | 一个班试点 | 统计直接在内存里算；不需要队列、缓存、多实例 |
 | 是否提交作业 | 要提交（文字 + 附件） | 有提交页和截止控制；评估同时看过程和结果 |
-| 后端语言 | TypeScript | Node.js + Hono + Drizzle，和前端共享类型 |
+| 后端语言 | ~~TypeScript~~ → **Rust**（11-22 改） | axum + sqlx + Postgres；JSON 接口不变，前端不用改 |
+| 部署 | **本地 Docker Compose**（11-22 定） | Postgres 和 app 两个容器；上传文件放 Docker volume |
+| 界面语言 | **默认英文**（11-22 定） | 保留中文切换；教学模式模板和演示数据改为英文 |
 
 实现过程中另外定下的几点：
 
 - **前端只有一个应用**（`apps/web`），老师端和学生端按角色路由，不再拆成两个应用。好处是老师查看对话时直接复用 chat-demo 的 Markdown、公式和代码渲染，登录也只做一套。
 - **登录自己做**（用户名 + 密码，HttpOnly Cookie），不依赖 Supabase Auth。学生账号由老师批量创建，系统只在创建时显示一次初始密码。
-- **数据库用标准 Postgres。** 本地开发用 PGlite（进程内的 Postgres，零安装），上线只需设置 `DATABASE_URL`。所以第 8 节的建议改为 **Neon**：试点只需要一个数据库，不需要 Supabase 的登录和存储；Neon 也没有「7 天无活动就暂停」的问题。
+- **数据库用标准 Postgres。** 现在由 Docker Compose 提供；以后要托管，只需把 `DATABASE_URL` 指向 Neon / Supabase 等（第 8 节）。第一版 TypeScript 后端用过的 PGlite 只能在 Node 里用，换成 Rust 后不再使用。
 - **模型**：第一期接 DeepSeek（Anthropic 兼容接口，和 chat-demo 原本用的一致）。另有一个「模拟模型」，不调用任何外部服务，用于本地开发和演示。
 - **截止后**：默认不能再提问，也不能再提交；老师可以对单个作业打开「允许迟交」，迟交会被标记。
 
@@ -108,7 +110,7 @@ DeepSeek 在 2026-11-12 开源了 [`deepseek-ai/chat-demo`](https://github.com/d
 apps/
   web/             # deepseek-ai/chat-demo（git subtree），老师端 + 学生端
     src/platform/  # 作业系统新增的代码：登录、路由、作业栏、老师控制台
-  server/          # API + AI 网关（Hono + Drizzle）
+  server/          # Rust：API + AI 网关（axum + sqlx），migrations/ 是表结构
 packages/
   shared/          # 前后端共享的类型和常量
 docs/
@@ -122,15 +124,14 @@ git subtree pull --prefix apps/web https://github.com/deepseek-ai/chat-demo.git 
 
 对 chat-demo 原有文件的改动控制在十来处，都是「挂钩子」：读开关、加请求头、换库名。新功能都放在 `src/platform/`。
 
-### 4.2 后端技术栈
+### 4.2 后端技术栈（已改为 Rust）
 
-推荐 **TypeScript（Node.js 22 + Hono 或 Fastify）+ Drizzle ORM**：
+**Rust：axum（HTTP）+ sqlx（Postgres，运行时 SQL，启动时自动迁移）+ reqwest（调用模型）+ argon2（密码哈希）。**
 
-- 和前端同一种语言，可以直接共享 chat-demo 里已经写好的协议类型（`src/services/api/types.ts`）。
-- SSE 流式转发写起来简单。
-- Drizzle 同时支持 SQLite 和 Postgres：开发时用 SQLite，上线换 Postgres，代码基本不用改。
-
-如果团队更熟 Python，**FastAPI + SQLAlchemy** 也完全可行，AI 生态更丰富，代价是协议类型要重写一遍。
+- 接口和第一版 TypeScript 后端完全一致（字段都是 camelCase），前端和 `packages/shared` 里的类型不用改。
+- 网关原样转发模型的 SSE 字节流，同时边解析边拼出完整回答存档。学生点「停止」时浏览器断开连接，响应流被释放，`Drop` 会把这一轮记为「中途停止」。
+- 测试用 `sqlx::test`：每个测试一个临时数据库，配合可注入的时钟测作业时间窗口。
+- 一个二进制同时提供命令：`serve`（默认）、`migrate`、`seed`、`create-teacher`。
 
 ## 5. AI 网关
 
@@ -255,12 +256,12 @@ providers          id, name, protocol(anthropic|openai), base_url, api_key_encry
 
 ### 建议（已按试点决策更新）
 
-1. **开发阶段**：PGlite（已实现，不用装任何东西）。
-2. **试点上线（海外、一个班）**，两种做法任选：
-   - **最省事**：一台小 VPS（每月几美元），后端直接用 PGlite 和本地磁盘存文件，定期备份 `.data/` 目录。
-   - **数据库托管**：**Neon** 免费版，设置 `DATABASE_URL` 即可，自带备份和分支。后端仍需要一个持久磁盘存上传文件；如果部署在磁盘不持久的平台（Render、Cloud Run 等），需要先实现 S3 兼容存储（Cloudflare R2 / Supabase Storage），接口已经留好（`apps/server/src/storage.ts`）。
+1. **现在**：Docker Compose 里的 Postgres 16（已实现）。开发和本地试用都用它。
+2. **以后上线（海外、一个班）**，两种做法任选：
+   - **最省事**：一台小 VPS（每月几美元），直接 `docker compose up -d`，定期备份两个 volume。
+   - **数据库托管**：**Neon** 免费版，把 `DATABASE_URL` 指过去即可。上传文件仍需要持久磁盘；部署到磁盘不持久的平台（Render、Cloud Run 等）前，需要先实现 S3 兼容存储（Cloudflare R2 / Supabase Storage），接口已经留好（`apps/server/src/storage.rs` 的 `Storage` trait）。
 3. 以后用户在**中国大陆**：在国内云服务器上自建 Postgres，原因是海外服务访问不稳定，未成年人数据出境也有合规要求。
-4. 代码只用标准 Postgres 和 Drizzle ORM，不绑定任何平台的专有功能，换数据库只需要改连接串。
+4. 代码只用标准 Postgres SQL，不绑定任何平台的专有功能，换数据库只需要改连接串。
 
 > 真正持续花钱的是**模型 API 调用**，不是数据库。所以每个作业要设 Token 额度，老师端要能看到费用统计。
 
@@ -287,7 +288,8 @@ providers          id, name, protocol(anthropic|openai), base_url, api_key_encry
 - ✅ 网关强制执行作业配置，完整记录每一轮（含重新生成、编辑、继续生成、中途停止），上传文件保留原件
 - ✅ 老师端：完成情况总览（提问数、Token、活跃天数、提交）、对话回放、提交内容、打分评语、导出 CSV
 - ✅ 老师可以「试用 AI」预览作业配置（不受时间限制，不计入统计）
-- ✅ 中英文界面；后端 25 个测试覆盖权限、时间窗口、额度、文件和网关改写
+- ✅ 中英文界面（默认英文）；后端 26 个测试覆盖权限、时间窗口、额度、文件和网关改写
+- ✅ 后端改写为 Rust，并提供 Docker Compose（Postgres + app）
 
 **第二期：评估**
 - S3 兼容文件存储（部署到磁盘不持久的平台时需要）
@@ -303,11 +305,11 @@ providers          id, name, protocol(anthropic|openai), base_url, api_key_encry
 
 ## 12. 待确认问题
 
-已确认：用户在海外、一个班试点、要提交作业、后端用 TypeScript；截止后的处理见第 0 节。
+已确认：用户在海外、一个班试点、要提交作业；后端改用 Rust，先用 Docker Compose 本地部署，界面默认英文；截止后的处理见第 0 节。
 
 还需要确认：
 
 1. **学生年龄段**：如果是未成年人，需要家长知情同意。
 2. **作业时间以外**，学生能不能用 AI 自由聊天（不计入评估）？目前不能。
-3. **部署方式**：小 VPS，还是托管平台 + Neon？这决定第二期要不要先做 S3 存储。
+3. **上线方式**：本地 Docker Compose 之后，是放到小 VPS，还是托管平台 + Neon？这决定第二期要不要先做 S3 存储。
 4. **评分规则**：第二期的 LLM 评审需要老师给出 rubric（评分维度和权重）。

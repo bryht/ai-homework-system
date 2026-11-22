@@ -334,7 +334,7 @@ export const chatDemoOverrides = {
       '只会清空本机浏览器里的对话和草稿；老师端的对话存档不受影响。',
   },
   en: {
-    appName: 'AI Homework Helper',
+    appName: 'AI Homework',
     welcomeMessageChat250808: 'Where would you like to start on this homework?',
     replyInvalidApiKey: 'Your session has expired. Please sign in again.',
     changeApiKey: 'Sign in again',

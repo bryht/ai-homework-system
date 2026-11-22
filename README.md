@@ -29,84 +29,108 @@
 - 每次请求都按作业配置改写：老师的教学提示词放在系统提示词最前面，学生无法覆盖；按开关去掉联网搜索、深度思考；检查时间窗口和额度
 - 原样流式转发给浏览器，同时把本轮问题、完整回答、用量、耗时存档；上传的文件保留原件
 
-## 本地运行
+## 用 Docker Compose 运行（推荐）
 
-需要 Node.js 22.12+ 和 pnpm 10。
+需要 Docker（含 Compose）。在仓库根目录：
 
 ```bash
-pnpm install
+docker compose up -d --build
 ```
 
 ```bash
-pnpm seed
+docker compose exec app ai-homework seed
 ```
 
-```bash
-pnpm dev
-```
-
-打开 http://localhost:8090 ，用演示账号登录（密码都是 `demo1234`）：
+打开 http://localhost:8787 ，用演示账号登录（密码都是 `demo1234`）：
 
 | 账号 | 角色 |
 | --- | --- |
-| `teacher` | 老师（王老师，「试点班」） |
+| `teacher` | 老师（Ms. Taylor，「Pilot Class」） |
 | `student1` / `student2` / `student3` | 学生 |
 
-没有配置 `DEEPSEEK_API_KEY` 时，作业使用**模拟模型**：不调用任何外部服务，回复里会显示网关注入的教学提示词，方便检查配置。配置 Key 后就能在作业里选 DeepSeek 模型：
+界面默认英文，登录页和「账号」页可以切换中文。
+
+没有配置 `DEEPSEEK_API_KEY` 时，作业使用**模拟模型**：不调用任何外部服务，回复里会显示网关注入的教学提示词，方便检查配置。要用 DeepSeek：
 
 ```bash
 cp .env.example .env
 ```
 
-数据默认存在 `.data/`（PGlite 数据库和上传的文件），删掉这个目录就能重置。
-
-## 部署
+在 `.env` 里填上 `DEEPSEEK_API_KEY`，然后重新启动：
 
 ```bash
-pnpm build
+docker compose up -d
 ```
+
+数据存在两个 Docker volume 里：`db-data`（Postgres）和 `uploads`（上传的文件）。完全重置：
 
 ```bash
-pnpm start
+docker compose down -v
 ```
 
-后端在 `PORT`（默认 8787）上同时提供接口和前端页面。上线前：
+创建正式的老师账号（不传 `--password` 会随机生成并打印）：
 
-1. 用 HTTPS（例如放在 Caddy 或平台自带的 HTTPS 后面），并设置 `COOKIE_SECURE=true`（`NODE_ENV=production` 时默认开启）。
-2. 创建老师账号：
+```bash
+docker compose exec app ai-homework create-teacher --username wang --name "Mr. Wang"
+```
 
-   ```bash
-   pnpm --filter @hw/server create-teacher --username wang --name 王老师
-   ```
-
-3. 数据库：默认 PGlite 存在 `DATA_DIR`；也可以设置 `DATABASE_URL` 使用 Neon / Supabase / 自建 Postgres，启动时自动建表。
-4. 上传的文件存在 `DATA_DIR/uploads`，需要持久磁盘。部署到磁盘不持久的平台前，需要先实现 S3 兼容存储（见设计文档第 8 节）。
-
-环境变量见 [.env.example](.env.example)。
+放到公网时，前面加一层 HTTPS（例如 Caddy），并在 `.env` 里设置 `COOKIE_SECURE=true`。
 
 ## 开发
 
+后端是 Rust（axum + sqlx + Postgres），前端是 TypeScript（chat-demo 改写）。需要 Rust 1.85+、Node.js 22.12+、pnpm 10。
+
+只用 Docker 跑数据库：
+
 ```bash
-pnpm test
+docker compose up -d db
+```
+
+启动后端（在 `apps/server`，读取仓库根目录的 `.env`，监听 8787）：
+
+```bash
+cp .env.example .env
 ```
 
 ```bash
-pnpm type
+cd apps/server && cargo run
+```
+
+另开一个终端启动前端开发服务器（http://localhost:8090 ，接口代理到 8787）：
+
+```bash
+pnpm install && pnpm dev
+```
+
+演示数据：
+
+```bash
+cd apps/server && cargo run -- seed
+```
+
+测试（需要一个 Postgres，`sqlx::test` 会为每个测试建一个临时数据库）：
+
+```bash
+cd apps/server && DATABASE_URL=postgres://homework:homework@localhost:5432/homework cargo test
+```
+
+前端类型检查和 lint：
+
+```bash
+pnpm type && pnpm lint
 ```
 
 ```
 apps/
   web/              # chat-demo（git subtree）+ src/platform/ 下的作业系统页面
-  server/           # Hono + Drizzle：REST API、AI 网关、测试
-packages/shared/    # 前后端共享的类型和常量
+  server/           # Rust：REST API、AI 网关、数据库迁移、测试
+packages/shared/    # 前端用的共享类型（和后端 JSON 接口一一对应）
 docs/design.md      # 设计文档
+Dockerfile          # 前端构建 + Rust 编译 + 精简运行镜像
+docker-compose.yml  # Postgres + app
 ```
 
-修改数据库表结构后生成迁移：
-
-```bash
-pnpm --filter @hw/server db:generate
-```
+数据库表结构在 `apps/server/migrations/`，服务启动时自动执行。
 
 合并 chat-demo 上游更新：
 

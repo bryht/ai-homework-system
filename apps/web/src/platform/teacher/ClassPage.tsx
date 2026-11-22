@@ -118,7 +118,7 @@ export const ClassPage = ({ classId }: { classId: string }) => {
               <TextArea
                 rows={5}
                 className={ui.mono}
-                placeholder={'张三\n李四, lisi\nAlice Wang'}
+                placeholder={'Emma Chen\nLiam Patel, liam\nSofia Garcia'}
                 value={roster}
                 onChange={(e) => setRoster(e.target.value)}
               />
