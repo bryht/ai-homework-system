@@ -5,6 +5,10 @@
 - 设计文档：[docs/design.md](docs/design.md)
 - 前端基于 [deepseek-ai/chat-demo](https://github.com/deepseek-ai/chat-demo)（MIT）改写
 
+| 学生：作业聊天 | 老师：完成情况 | 老师：对话回放 |
+| --- | --- | --- |
+| ![](docs/screenshots/student-chat.png) | ![](docs/screenshots/teacher-overview.png) | ![](docs/screenshots/teacher-transcript.png) |
+
 ## 功能（第一期）
 
 **老师**
