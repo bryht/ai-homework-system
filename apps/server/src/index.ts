@@ -3,11 +3,12 @@ import path from 'node:path'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { createApp } from './app.js'
-import { loadConfig } from './config.js'
+import { loadConfig, loadDotEnv } from './config.js'
 import { openDatabase } from './db/client.js'
 import { createRegistryFromConfig } from './gateway/providers.js'
 import { createDiskStorage } from './storage.js'
 
+loadDotEnv()
 const config = loadConfig()
 const { db, close } = await openDatabase({
   databaseUrl: config.databaseUrl,

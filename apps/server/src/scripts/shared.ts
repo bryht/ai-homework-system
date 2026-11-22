@@ -1,8 +1,9 @@
 import path from 'node:path'
-import { loadConfig } from '../config.js'
+import { loadConfig, loadDotEnv } from '../config.js'
 import { openDatabase } from '../db/client.js'
 
 export const openFromEnv = () => {
+  loadDotEnv()
   const config = loadConfig()
   return openDatabase({
     databaseUrl: config.databaseUrl,

@@ -1,7 +1,16 @@
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
+
+/** 读取仓库根目录的 .env（如果有）；已经设置的环境变量优先 */
+export const loadDotEnv = () => {
+  const file = path.join(repoRoot, '.env')
+  if (existsSync(file)) {
+    process.loadEnvFile(file)
+  }
+}
 
 export type Config = {
   port: number
