@@ -22,6 +22,8 @@ import {
   type MessageVersions,
   type SelectMessageVersion,
 } from './BranchSwitcher.js'
+import { platformFlags } from '../../platform/flags.js'
+import { goToLogin } from '../../platform/session.js'
 import styles from './AssistantMessage.module.css'
 
 const TOP_UP_URL = 'https://platform.deepseek.com/top_up'
@@ -102,7 +104,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                 <button
                   type="button"
                   className={styles.noticeAction}
-                  onClick={() => openSettings('data')}
+                  onClick={() => (platformFlags.apiKey ? openSettings('data') : goToLogin())}
                 >
                   {t('changeApiKey')}
                 </button>
@@ -143,7 +145,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           <BranchSwitcher versions={versions} disabled={busy} onSelect={onSelectVersion} />
           <div className={clsx(styles.actions, isLast && styles.alwaysShow)}>
             {copyText ? <CopyButton text={copyText} /> : null}
-            {responseText && !refused ? (
+            {platformFlags.voice && responseText && !refused ? (
               <ReadAloudButton messageId={message.id} text={responseText} />
             ) : null}
             <IconButton

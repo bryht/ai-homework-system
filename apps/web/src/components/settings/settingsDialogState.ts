@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { platformFlags } from '../../platform/flags.js'
 import { useSettings } from '../../services/settings.js'
 
 /** 设置弹窗的分组：通用设置 / 数据管理 */
@@ -17,7 +18,8 @@ export const closeSettings = () => useSettingsDialog.setState({ open: false })
 
 /** 没有 API Key 时打开设置并选中 API Key 所在的「数据管理」，返回是否已有 Key */
 export const ensureApiKey = () => {
-  if (useSettings.getState().apiKey) {
+  // 作业系统里 API Key 保存在后端，进入聊天页前已经登录
+  if (!platformFlags.apiKey || useSettings.getState().apiKey) {
     return true
   }
   openSettings('data')

@@ -1,4 +1,6 @@
 import { translate, type TranslationMessage } from '../../i18n/index.js'
+import { getGatewayHeaders, type GatewayMeta } from '../../platform/homeworkScope.js'
+import { useSettings } from '../settings.js'
 import { resizeUploadImage } from '../../utils/resizeUploadImage.js'
 import { readMessageEvent } from './parseEvent.js'
 import { readServerSentEvents } from './sse.js'
@@ -70,7 +72,7 @@ const readErrorResponse = async (
 export const request = async (url: string, init: RequestInit): Promise<Response> => {
   let response: Response
   try {
-    response = await fetch(url, init)
+    response = await fetch(url, { credentials: 'same-origin', ...init })
   } catch (error) {
     if (init.signal?.aborted) {
       throw error
@@ -83,9 +85,17 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
   return response
 }
 
-const anthropicHeaders = (apiKey: string, beta: boolean): Record<string, string> => ({
-  // DeepSeek 兼容接口的鉴权方式，也可使用 Authorization: Bearer。
-  'x-api-key': apiKey,
+/**
+ * 作业系统：请求发到自己的后端网关，用登录 Cookie 鉴权，API Key 保存在服务端。
+ * apiKey 参数保留只为少改上游代码，不再发送；改为携带作业和消息 ID 供网关存档。
+ */
+const anthropicHeaders = (
+  _apiKey: string,
+  beta: boolean,
+  meta?: GatewayMeta
+): Record<string, string> => ({
+  ...getGatewayHeaders(meta),
+  'Accept-Language': useSettings.getState().locale,
   // Files API 和通过 file_id 引用图片时必传；纯文本聊天无需携带。
   ...(beta ? { 'anthropic-beta': FILES_BETA } : {}),
 })
@@ -145,12 +155,13 @@ const hasFile = (body: CreateMessageRequest) =>
 export async function* streamMessage(
   apiKey: string,
   body: CreateMessageRequest,
-  signal: AbortSignal
+  signal: AbortSignal,
+  meta?: GatewayMeta
 ): AsyncGenerator<MessageStreamEvent> {
   const response = await request(`${ANTHROPIC_BASE_URL}/messages`, {
     method: 'POST',
     headers: {
-      ...anthropicHeaders(apiKey, hasFile(body)),
+      ...anthropicHeaders(apiKey, hasFile(body), meta),
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
     },

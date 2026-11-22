@@ -24,6 +24,7 @@ import { stopReadAloud } from '../services/speech/readAloud.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
 import { closeMobileSider } from '../components/sider/mobileSiderState.js'
 import { MobileSider, Sider } from '../components/sider/Sider.js'
+import { HomeworkBar } from '../platform/student/HomeworkBar.js'
 import styles from './App.module.css'
 
 export const App = () => {
@@ -78,6 +79,7 @@ export const App = () => {
       <div ref={frameRef} className={styles.frame}>
         {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
         <main className={styles.main}>
+          <HomeworkBar />
           {saveError ? (
             <div className={styles.saveError} role="alert">
               <span>{t('sessionSaveFailed')}</span>

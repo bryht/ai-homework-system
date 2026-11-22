@@ -1,0 +1,135 @@
+.homeworkCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cardTitle {
+  margin: 4px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+/* 聊天页顶部的作业栏，放在 chat-demo 主区域最上方 */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+}
+
+.barBack {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.barMain {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.barTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 600;
+
+  span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.barMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.recorded {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.barActions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.banner {
+  padding: 8px 16px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.description {
+  max-height: 60vh;
+  overflow-y: auto;
+  font-size: 14px;
+}
+
+.dialog {
+  width: min(680px, calc(100vw - 32px));
+}
+
+.fileList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fileItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+@media not all and (min-width: 768px) {
+  .bar {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+  }
+
+  .barActions {
+    width: 100%;
+
+    button {
+      flex: 1;
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { useSettings } from '../services/settings.js'
+import { chatDemoOverrides } from '../platform/i18n.js'
 import { en } from './en.js'
 import { zh } from './zh.js'
 
@@ -23,8 +24,8 @@ const createTranslate =
     })
 
 const translators = {
-  'zh-CN': createTranslate(zh),
-  'en-US': createTranslate(en),
+  'zh-CN': createTranslate({ ...zh, ...chatDemoOverrides.zh }),
+  'en-US': createTranslate({ ...en, ...chatDemoOverrides.en }),
 }
 
 /** 组件订阅语言变化；普通函数在调用时读取当前语言。 */

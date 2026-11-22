@@ -34,6 +34,7 @@ import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
+import { platformFlags } from '../../platform/flags.js'
 import styles from './Settings.module.css'
 
 /**
@@ -98,13 +99,15 @@ const SettingsContent = () => {
             <>
               <ThemeSetting />
               <LocaleSetting />
-              <TtsVoiceSetting />
+              {platformFlags.voice ? <TtsVoiceSetting /> : null}
               <LocationSetting />
             </>
           ) : (
             <>
-              <ApiKeyField editor={apiKeyEditor} />
-              <ImportHistory historyImport={historyImport} disabled={historyBusy} />
+              {platformFlags.apiKey ? <ApiKeyField editor={apiKeyEditor} /> : null}
+              {platformFlags.historyImport ? (
+                <ImportHistory historyImport={historyImport} disabled={historyBusy} />
+              ) : null}
               <ExportHistory disabled={historyBusy} />
               <SettingCell
                 label={t('deleteAllSessions')}
@@ -121,7 +124,7 @@ const SettingsContent = () => {
                   </Button>
                 }
               />
-              {isMobile ? <ApiKeyConfirm editor={apiKeyEditor} /> : null}
+              {isMobile && platformFlags.apiKey ? <ApiKeyConfirm editor={apiKeyEditor} /> : null}
             </>
           )}
         </div>

@@ -32,6 +32,8 @@ import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
 import { Spectrum } from './Spectrum.js'
 import { useTranslate } from '../../i18n/index.js'
+import { platformFlags } from '../../platform/flags.js'
+import { getHomeworkAi, useHomeworkAi } from '../../platform/homeworkScope.js'
 import styles from './ChatInput.module.css'
 
 /** 输入框：自适应高度的文本框 + 文件 + 深度思考与智能搜索开关 + 语音输入 + 发送 / 停止 */
@@ -42,6 +44,7 @@ export const ChatInput = memo(function ChatInput({ sessionId }: { sessionId: str
 
 const Input = ({ sessionId }: { sessionId: string | null }) => {
   const t = useTranslate()
+  const homeworkAi = useHomeworkAi()
   const draft = useDrafts((state) => state.drafts.get(sessionId) ?? EMPTY_DRAFT)
   const { text, attachments } = draft
   const setText = (value: string) => setDraftText(sessionId, value)
@@ -75,6 +78,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   }, [t])
 
   const acceptFiles = (files: File[]) => {
+    // 作业不允许上传时，粘贴和拖拽的文件也一并忽略
+    if (!getHomeworkAi().allowFileUpload) {
+      return
+    }
     if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
       return
     }
@@ -202,53 +209,61 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       <div className={styles.functionRow}>
         {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
         <div ref={togglesRef} className={styles.toggles}>
-          <Tooltip content={t('deactivatedThinkTooltip')}>
-            <button
-              type="button"
-              className={clsx(styles.toggle, thinking && styles.selected)}
-              aria-label={t('thinkingSwitch')}
-              aria-pressed={thinking}
-              onClick={() => setThinking(!thinking)}
-            >
-              <IconThinkOutline14 />
-              <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
-            </button>
-          </Tooltip>
-          <Tooltip content={t('deactivatedSearchTooltip')}>
-            <button
-              type="button"
-              className={clsx(styles.toggle, search && styles.selected)}
-              aria-label={t('search')}
-              aria-pressed={search}
-              onClick={() => setSearch(!search)}
-            >
-              <IconGlobeLanguageOutline14 />
-              <span className={styles.toggleLabel}>{t('search')}</span>
-            </button>
-          </Tooltip>
+          {homeworkAi.allowThinking ? (
+            <Tooltip content={t('deactivatedThinkTooltip')}>
+              <button
+                type="button"
+                className={clsx(styles.toggle, thinking && styles.selected)}
+                aria-label={t('thinkingSwitch')}
+                aria-pressed={thinking}
+                onClick={() => setThinking(!thinking)}
+              >
+                <IconThinkOutline14 />
+                <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
+              </button>
+            </Tooltip>
+          ) : null}
+          {homeworkAi.allowWebSearch ? (
+            <Tooltip content={t('deactivatedSearchTooltip')}>
+              <button
+                type="button"
+                className={clsx(styles.toggle, search && styles.selected)}
+                aria-label={t('search')}
+                aria-pressed={search}
+                onClick={() => setSearch(!search)}
+              >
+                <IconGlobeLanguageOutline14 />
+                <span className={styles.toggleLabel}>{t('search')}</span>
+              </button>
+            </Tooltip>
+          ) : null}
         </div>
         <div className={styles.right}>
-          <VoiceButton
-            status={voice.status}
-            disabled={!voice.available}
-            seconds={voice.seconds}
-            onClick={() => {
-              if (
-                voice.status !== 'idle' ||
-                (!useChatStore.getState().importingHistory && ensureApiKey())
-              ) {
-                void voice.toggle()
-              }
-            }}
-          />
-          <IconButton
-            size="m"
-            tone="primary"
-            icon={<IconPaperclipOutline16 />}
-            tooltip={t('uploadFile')}
-            disabled={importingHistory}
-            onClick={() => ensureApiKey() && fileInputRef.current?.click()}
-          />
+          {platformFlags.voice ? (
+            <VoiceButton
+              status={voice.status}
+              disabled={!voice.available}
+              seconds={voice.seconds}
+              onClick={() => {
+                if (
+                  voice.status !== 'idle' ||
+                  (!useChatStore.getState().importingHistory && ensureApiKey())
+                ) {
+                  void voice.toggle()
+                }
+              }}
+            />
+          ) : null}
+          {homeworkAi.allowFileUpload ? (
+            <IconButton
+              size="m"
+              tone="primary"
+              icon={<IconPaperclipOutline16 />}
+              tooltip={t('uploadFile')}
+              disabled={importingHistory}
+              onClick={() => ensureApiKey() && fileInputRef.current?.click()}
+            />
+          ) : null}
           <input
             ref={fileInputRef}
             type="file"

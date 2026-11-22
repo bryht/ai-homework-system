@@ -50,6 +50,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@hw/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@types/katex':
         specifier: ^0.16.5
         version: 0.16.8

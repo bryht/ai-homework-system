@@ -1031,7 +1031,13 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             tools: serverTools(initial.search ?? false),
             ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
           },
-          controller.signal
+          controller.signal,
+          {
+            conversationId: sessionId,
+            userMessageId: prepared.question.id,
+            parentMessageId: prepared.question.parentId ?? null,
+            assistantMessageId: initial.id,
+          }
         )
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {

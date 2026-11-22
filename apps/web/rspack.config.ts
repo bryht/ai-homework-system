@@ -89,5 +89,21 @@ export const createConfig = ({
   devServer: { port: 8090, ...devServer },
 })
 
+// 作业系统：API 与页面同源（生产环境由后端托管 dist），开发时把接口代理到本地后端
+const backend = process.env.BACKEND_URL ?? 'http://localhost:8787'
 // eslint-disable-next-line import/no-default-export
-export default defineConfig(createConfig())
+export default defineConfig(
+  createConfig({
+    apiOrigin: '',
+    devServer: {
+      proxy: [
+        {
+          context: ['/api', '/anthropic', '/v1'],
+          target: backend,
+          // 保留浏览器的 Host，后端的 Origin 校验才能通过
+          changeOrigin: false,
+        },
+      ],
+    },
+  })
+)
