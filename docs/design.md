@@ -11,12 +11,13 @@
 | 是否提交作业 | 要提交（文字 + 附件） | 有提交页和截止控制；评估同时看过程和结果 |
 | 后端语言 | ~~TypeScript~~ → **Rust**（11-22 改） | axum + sqlx + Postgres；JSON 接口不变，前端不用改 |
 | 部署 | **本地 Docker Compose**（11-22 定） | Postgres 和 app 两个容器；上传文件放 Docker volume |
+| 前端托管 | **可选 GitHub Pages**（11-22 定） | 登录改用 Bearer 令牌（跨站 Cookie 会被 Safari/Firefox 拦截）；后端按 `CORS_ORIGINS` 放行 Pages 域名；后端仍需公网 HTTPS |
 | 界面语言 | **默认英文**（11-22 定） | 保留中文切换；教学模式模板和演示数据改为英文 |
 
 实现过程中另外定下的几点：
 
 - **前端只有一个应用**（`apps/web`），老师端和学生端按角色路由，不再拆成两个应用。好处是老师查看对话时直接复用 chat-demo 的 Markdown、公式和代码渲染，登录也只做一套。
-- **登录自己做**（用户名 + 密码，HttpOnly Cookie），不依赖 Supabase Auth。学生账号由老师批量创建，系统只在创建时显示一次初始密码。
+- **登录自己做**（用户名 + 密码），不依赖 Supabase Auth。登录后发令牌：前端放 GitHub Pages 时用 `Authorization: Bearer` 请求头，同源部署时也兼容 Cookie。学生账号由老师批量创建，系统只在创建时显示一次初始密码。
 - **数据库用标准 Postgres。** 现在由 Docker Compose 提供；以后要托管，只需把 `DATABASE_URL` 指向 Neon / Supabase 等（第 8 节）。第一版 TypeScript 后端用过的 PGlite 只能在 Node 里用，换成 Rust 后不再使用。
 - **模型**：第一期接 DeepSeek（Anthropic 兼容接口，和 chat-demo 原本用的一致）。另有一个「模拟模型」，不调用任何外部服务，用于本地开发和演示。
 - **截止后**：默认不能再提问，也不能再提交；老师可以对单个作业打开「允许迟交」，迟交会被标记。

@@ -4,7 +4,7 @@ import { Button } from '../../components/base/Button.js'
 import { IconPaperclipOutline16 } from '../../components/base/icons.js'
 import { Modal } from '../../components/base/Modal.js'
 import { showToast } from '../../components/base/toastState.js'
-import { api } from '../api.js'
+import { api, downloadFile } from '../api.js'
 import { updateScopedHomework } from '../homeworkScope.js'
 import { usePt } from '../i18n.js'
 import { Checkbox, TextArea, ui } from '../ui/components.js'
@@ -104,7 +104,15 @@ export const SubmissionDialog = ({
         <div className={styles.fileList}>
           {files.map((file) => (
             <span key={file.id} className={styles.fileItem}>
-              <a href={`/api/files/${file.id}`} target="_blank" rel="noreferrer">
+              <a
+                href={`#file-${file.id}`}
+                onClick={(event) => {
+                  event.preventDefault()
+                  void downloadFile(`/api/files/${file.id}`, file.filename).catch((e: unknown) =>
+                    setError(String(e))
+                  )
+                }}
+              >
                 {file.filename}
               </a>
               <span className={ui.muted}>{formatBytes(file.size)}</span>

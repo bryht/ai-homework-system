@@ -76,6 +76,33 @@ docker compose exec app ai-homework create-teacher --username wang --name "Mr. W
 
 放到公网时，前面加一层 HTTPS（例如 Caddy），并在 `.env` 里设置 `COOKIE_SECURE=true`。
 
+## 前端放到 GitHub Pages（可选）
+
+前端是纯静态页面，可以放在 GitHub Pages（免费，自带 HTTPS），后端单独运行。登录用请求头里的令牌（Bearer token），不依赖跨站 Cookie，Safari 也能用。
+
+**前提：后端要有一个公网 HTTPS 地址。** Pages 是 HTTPS 页面，浏览器不允许它请求 `http://` 的后端。可以：
+
+- 在 VPS 上跑 `docker compose`，前面加 Caddy 自动申请证书；
+- 或者临时用 Cloudflare Tunnel 把本机的 8787 端口暴露出去（`cloudflared tunnel --url http://localhost:8787`，免费，但每次重启地址会变）。
+
+设置步骤：
+
+1. 仓库 **Settings → Pages → Build and deployment → Source** 选 **GitHub Actions**。
+2. **Settings → Secrets and variables → Actions → Variables** 新建变量 `API_ORIGIN`，值是后端地址，例如 `https://api.example.com`。
+3. 后端 `.env` 里加上 Pages 的地址，然后重启：
+
+   ```
+   CORS_ORIGINS=https://bryht.github.io
+   ```
+
+4. 推送到 `main` 分支（或在 Actions 页面手动运行 **Deploy web app to GitHub Pages**），页面会发布到 `https://bryht.github.io/ai-homework-system/`。
+
+工作流在 `.github/workflows/pages.yml`。本地构建指向其他后端的前端：
+
+```bash
+API_ORIGIN=https://api.example.com pnpm build
+```
+
 ## 开发
 
 后端是 Rust（axum + sqlx + Postgres），前端是 TypeScript（chat-demo 改写）。需要 Rust 1.85+、Node.js 22.12+、pnpm 10。

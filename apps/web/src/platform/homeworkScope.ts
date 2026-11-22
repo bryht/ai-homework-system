@@ -1,5 +1,6 @@
 import { GATEWAY_HEADERS, type AiConfig, type Homework, type StudentHomework } from '@hw/shared'
 import { create } from 'zustand'
+import { authHeaders } from './token.js'
 
 /**
  * 当前聊天页所属的作业。chat-demo 的 API 层从这里读作业 ID 拼请求头，
@@ -53,7 +54,7 @@ export type GatewayMeta = {
 /** 网关需要的请求头：作业 ID，以及（发消息时）会话和消息 ID，用于存档和还原分支 */
 export const getGatewayHeaders = (meta?: GatewayMeta): Record<string, string> => {
   const homework = useHomeworkScope.getState().homework
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = authHeaders()
   if (homework) {
     headers[GATEWAY_HEADERS.homeworkId] = homework.id
   }

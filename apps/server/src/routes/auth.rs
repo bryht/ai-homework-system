@@ -63,8 +63,8 @@ async fn login(
         return Err(wrong_credentials());
     }
     state.login_limiter.reset(&key);
-    let cookie = start_session(&state, &row.id).await?;
-    Ok(([(header::SET_COOKIE, cookie)], Json(json!({ "user": row.to_user() }))))
+    let (token, cookie) = start_session(&state, &row.id).await?;
+    Ok(([(header::SET_COOKIE, cookie)], Json(json!({ "user": row.to_user(), "token": token }))))
 }
 
 fn wrong_credentials() -> AppError {

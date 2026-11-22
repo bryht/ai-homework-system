@@ -1,6 +1,8 @@
 import type { ContentBlock, Conversation, FileInfo, Turn } from '@hw/shared'
 import { IconPaperclipOutline16, IconSearchOutline16 } from '../../components/base/icons.js'
 import { Markdown } from '../../components/markdown/Markdown.js'
+import { showToast } from '../../components/base/toastState.js'
+import { downloadFile } from '../api.js'
 import { usePt, type PlatformKey } from '../i18n.js'
 import { Badge, ui } from '../ui/components.js'
 import { formatBytes, formatDateTime, formatNumber } from '../ui/format.js'
@@ -20,7 +22,16 @@ const textOf = (blocks: ContentBlock[]) =>
     .join('')
 
 export const FileChip = ({ file }: { file: FileInfo }) => (
-  <a className={ui.fileChip} href={`/api/files/${file.id}`} target="_blank" rel="noreferrer">
+  <a
+    className={ui.fileChip}
+    href={`#file-${file.id}`}
+    onClick={(event) => {
+      event.preventDefault()
+      void downloadFile(`/api/files/${file.id}`, file.filename).catch((e: unknown) =>
+        showToast(String(e))
+      )
+    }}
+  >
     <IconPaperclipOutline16 />
     {file.filename} <span className={ui.muted}>{formatBytes(file.size)}</span>
   </a>

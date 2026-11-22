@@ -1,0 +1,61 @@
+# Builds the web app and publishes it to GitHub Pages.
+#
+# One-time setup (repository Settings):
+#   1. Pages → Build and deployment → Source: "GitHub Actions".
+#   2. Secrets and variables → Actions → Variables → New variable:
+#      API_ORIGIN = public HTTPS address of the backend, e.g. https://api.example.com
+#   3. On the backend, allow the Pages site: CORS_ORIGINS=https://<user>.github.io
+name: Deploy web app to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/web/**
+      - packages/shared/**
+      - pnpm-lock.yaml
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter "@hw/web..."
+      - name: Check API_ORIGIN
+        run: |
+          if [ -z "${{ vars.API_ORIGIN }}" ]; then
+            echo "::error::Set the repository variable API_ORIGIN to the backend's HTTPS address"
+            exit 1
+          fi
+      - run: pnpm --filter @hw/web build
+        env:
+          API_ORIGIN: ${{ vars.API_ORIGIN }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

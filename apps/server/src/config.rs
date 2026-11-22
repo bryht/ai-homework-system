@@ -21,6 +21,8 @@ pub struct Config {
     pub deepseek: DeepSeekConfig,
     /// The mock model is enabled automatically when no real model is configured.
     pub enable_mock: bool,
+    /// Origins allowed to call the API from another site, e.g. `https://bryht.github.io` for GitHub Pages.
+    pub cors_origins: Vec<String>,
 }
 
 fn var(name: &str) -> Option<String> {
@@ -42,6 +44,11 @@ impl Config {
             session_days: var("SESSION_DAYS").map(|d| d.parse()).transpose()?.unwrap_or(14),
             cookie_secure: var("COOKIE_SECURE").map(|v| v == "true").unwrap_or(production),
             enable_mock: var("ENABLE_MOCK_AI").map(|v| v == "true").unwrap_or(api_key.is_none()),
+            cors_origins: var("CORS_ORIGINS")
+                .map(|v| {
+                    v.split(',').map(|o| o.trim().trim_end_matches('/').to_string()).filter(|o| !o.is_empty()).collect()
+                })
+                .unwrap_or_default(),
             deepseek: DeepSeekConfig {
                 api_key,
                 base_url: var("DEEPSEEK_BASE_URL")
@@ -64,6 +71,7 @@ impl Config {
             cookie_secure: false,
             deepseek: DeepSeekConfig { api_key: None, base_url: String::new() },
             enable_mock: true,
+            cors_origins: vec!["https://school.github.io".into()],
         }
     }
 }

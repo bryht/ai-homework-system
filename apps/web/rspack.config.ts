@@ -94,7 +94,8 @@ const backend = process.env.BACKEND_URL ?? 'http://localhost:8787'
 // eslint-disable-next-line import/no-default-export
 export default defineConfig(
   createConfig({
-    apiOrigin: '',
+    // 同源部署留空；前端放在 GitHub Pages 等其他域名时，设为后端地址，如 https://api.example.com
+    apiOrigin: (process.env.API_ORIGIN ?? '').replace(/\/+$/, ''),
     devServer: {
       proxy: [
         {

@@ -10,7 +10,7 @@ use crate::{
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, FromRequest, Request, State},
-    http::{Method, header},
+    http::{HeaderName, HeaderValue, Method, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{any, get},
@@ -19,7 +19,10 @@ use serde::de::DeserializeOwned;
 use serde_json::json;
 use sqlx::PgPool;
 use std::{ops::Deref, sync::Arc};
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
+    services::{ServeDir, ServeFile},
+};
 
 pub struct AppStateInner {
     pub db: PgPool,
@@ -70,8 +73,9 @@ impl<T: DeserializeOwned, S: Send + Sync> FromRequest<S> for JsonBody<T> {
     }
 }
 
-/// CSRF protection: writes must come from the same host (together with SameSite=Lax cookies).
-async fn same_origin_writes(request: Request, next: Next) -> Response {
+/// CSRF protection: writes must come from the same host (together with SameSite=Lax cookies)
+/// or from an origin listed in `CORS_ORIGINS`.
+async fn same_origin_writes(State(state): State<AppState>, request: Request, next: Next) -> Response {
     let unsafe_method = matches!(*request.method(), Method::POST | Method::PUT | Method::PATCH | Method::DELETE);
     if let (true, Some(origin)) = (unsafe_method, request.headers().get(header::ORIGIN)) {
         let host = request
@@ -84,7 +88,8 @@ async fn same_origin_writes(request: Request, next: Next) -> Response {
             .ok()
             .and_then(|o| o.split_once("://"))
             .map(|(_, rest)| rest.split('/').next().unwrap_or(rest));
-        if host.is_none() || origin_host != host {
+        let allowed = origin.to_str().is_ok_and(|o| state.config.cors_origins.iter().any(|a| a == o));
+        if !allowed && (host.is_none() || origin_host != host) {
             return AppError::forbidden("Cross-site request rejected", "跨站请求被拒绝").into_response();
         }
     }
@@ -127,9 +132,34 @@ pub fn build_router(state: AppState) -> Router {
         router = router.fallback_service(ServeDir::new(&state.config.web_dist).fallback(ServeFile::new(index)));
     }
 
+    let cors = cors_layer(&state.config.cors_origins);
     router
         .layer(DefaultBodyLimit::max(32 * 1024 * 1024))
-        .layer(middleware::from_fn(same_origin_writes))
+        .layer(middleware::from_fn_with_state(state.clone(), same_origin_writes))
         .layer(middleware::from_fn(localize_errors))
+        .layer(cors)
         .with_state(state)
+}
+
+/// Cross-origin access for a web app hosted elsewhere (GitHub Pages). Auth uses Bearer tokens,
+/// so no cookies are sent cross-site.
+fn cors_layer(origins: &[String]) -> CorsLayer {
+    let origins: Vec<HeaderValue> = origins.iter().filter_map(|o| HeaderValue::from_str(o).ok()).collect();
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(origins))
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE])
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            header::ACCEPT,
+            header::ACCEPT_LANGUAGE,
+            HeaderName::from_static("anthropic-beta"),
+            HeaderName::from_static("x-hw-homework-id"),
+            HeaderName::from_static("x-hw-conversation-id"),
+            HeaderName::from_static("x-hw-user-message-id"),
+            HeaderName::from_static("x-hw-parent-message-id"),
+            HeaderName::from_static("x-hw-assistant-message-id"),
+        ])
+        .expose_headers([header::CONTENT_DISPOSITION])
+        .max_age(std::time::Duration::from_secs(3600))
 }

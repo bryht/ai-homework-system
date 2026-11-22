@@ -216,3 +216,53 @@ async fn stores_grades_and_exports_csv(db: PgPool) {
     let csv = ctx.get(&format!("/api/homeworks/{}/export.csv", s.homework_id), &s.teacher).await.text();
     assert!(csv.contains("zhangsan,张三,0,0,0,,,92,\"思路清晰, \"\"好\"\"\""), "{csv}");
 }
+
+#[sqlx::test]
+async fn bearer_tokens_work_for_a_web_app_on_another_origin(db: PgPool) {
+    let ctx = Ctx::new(db);
+    ctx.create_teacher("teacher").await;
+    let pages = ("origin", "https://school.github.io");
+    let login = ctx
+        .call(
+            Method::POST,
+            "/api/auth/login",
+            None,
+            Some(json!({ "username": "teacher", "password": "teacher-pass" })),
+            &[pages, ("host", "api.school.example")],
+        )
+        .await;
+    assert_eq!(login.status, StatusCode::OK);
+    assert_eq!(login.headers["access-control-allow-origin"], "https://school.github.io");
+    let auth = format!("Bearer {}", login.json()["token"].as_str().unwrap());
+
+    let me = ctx.call(Method::GET, "/api/auth/me", None, None, &[("authorization", &auth)]).await.json();
+    assert_eq!(me["user"]["username"], "teacher");
+    // Writes from the allowed origin pass the cross-site check.
+    let created = ctx
+        .call(
+            Method::POST,
+            "/api/classes",
+            None,
+            Some(json!({ "name": "x" })),
+            &[("authorization", &auth), pages, ("host", "api.school.example")],
+        )
+        .await;
+    assert_eq!(created.status, StatusCode::OK);
+    // Preflight answers only for configured origins.
+    let preflight = ctx
+        .call(
+            Method::OPTIONS,
+            "/anthropic/v1/messages",
+            None,
+            None,
+            &[
+                pages,
+                ("access-control-request-method", "POST"),
+                ("access-control-request-headers", "authorization,x-hw-homework-id"),
+            ],
+        )
+        .await;
+    assert_eq!(preflight.headers["access-control-allow-origin"], "https://school.github.io");
+    let other = ctx.call(Method::GET, "/api/health", None, None, &[("origin", "https://evil.example")]).await;
+    assert!(other.headers.get("access-control-allow-origin").is_none());
+}

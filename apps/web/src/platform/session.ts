@@ -2,6 +2,7 @@ import type { User } from '@hw/shared'
 import { create } from 'zustand'
 import { api, setUnauthorizedHandler } from './api.js'
 import { navigate } from './router.js'
+import { setToken } from './token.js'
 
 type SessionState = {
   status: 'loading' | 'ready'
@@ -20,22 +21,25 @@ export const loadSession = async () => {
 }
 
 export const login = async (username: string, password: string) => {
-  const { user } = await api<{ user: User }>('/api/auth/login', {
+  const { user, token } = await api<{ user: User; token: string }>('/api/auth/login', {
     method: 'POST',
     json: { username, password },
   })
+  setToken(token)
   useSession.setState({ user })
   navigate({ name: 'home' })
 }
 
 export const logout = async () => {
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {})
+  setToken(null)
   useSession.setState({ user: null })
   navigate({ name: 'login' })
 }
 
 /** 登录过期：清掉用户，回到登录页 */
 export const goToLogin = () => {
+  setToken(null)
   useSession.setState({ user: null })
   navigate({ name: 'login' })
 }

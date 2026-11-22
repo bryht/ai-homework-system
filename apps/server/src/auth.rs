@@ -45,8 +45,8 @@ fn session_cookie(state: &AppState, value: &str, max_age: i64) -> HeaderValue {
     .expect("valid cookie header")
 }
 
-/// Creates a session and returns the `Set-Cookie` header value.
-pub async fn start_session(state: &AppState, user_id: &str) -> AppResult<HeaderValue> {
+/// Creates a session; returns the token (for Bearer auth) and the matching `Set-Cookie` value.
+pub async fn start_session(state: &AppState, user_id: &str) -> AppResult<(String, HeaderValue)> {
     let token = new_token();
     let max_age = state.config.session_days * 86_400;
     let expires_at: DateTime<Utc> = state.clock.now() + chrono::Duration::seconds(max_age);
@@ -56,7 +56,8 @@ pub async fn start_session(state: &AppState, user_id: &str) -> AppResult<HeaderV
         .bind(expires_at)
         .execute(&state.db)
         .await?;
-    Ok(session_cookie(state, &token, max_age))
+    let cookie = session_cookie(state, &token, max_age);
+    Ok((token, cookie))
 }
 
 pub async fn end_session(state: &AppState, headers: &HeaderMap) -> AppResult<HeaderValue> {
@@ -66,7 +67,18 @@ pub async fn end_session(state: &AppState, headers: &HeaderMap) -> AppResult<Hea
     Ok(session_cookie(state, "", 0))
 }
 
+/// The session token from `Authorization: Bearer ...` (used when the web app is hosted on another
+/// origin, e.g. GitHub Pages) or from the session cookie (same-origin setup).
 fn session_token(headers: &HeaderMap) -> Option<String> {
+    let bearer = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(str::trim)
+        .filter(|t| !t.is_empty());
+    if let Some(token) = bearer {
+        return Some(token.to_string());
+    }
     headers
         .get_all(header::COOKIE)
         .iter()

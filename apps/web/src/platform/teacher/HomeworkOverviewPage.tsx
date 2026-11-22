@@ -1,6 +1,7 @@
 import type { HomeworkOverview } from '@hw/shared'
 import { Button } from '../../components/base/Button.js'
-import { api } from '../api.js'
+import { showToast } from '../../components/base/toastState.js'
+import { api, downloadFile } from '../api.js'
 import { usePt } from '../i18n.js'
 import { navigate } from '../router.js'
 import {
@@ -54,11 +55,18 @@ export const HomeworkOverviewPage = ({ homeworkId }: { homeworkId: string }) => 
             >
               {pt('previewAi')}
             </Button>
-            <a href={`/api/homeworks/${homeworkId}/export.csv`} download>
-              <Button size="m" variant="outlined" tabIndex={-1}>
-                {pt('exportCsv')}
-              </Button>
-            </a>
+            <Button
+              size="m"
+              variant="outlined"
+              onClick={() =>
+                void downloadFile(
+                  `/api/homeworks/${homeworkId}/export.csv`,
+                  `${homework.title}.csv`
+                ).catch((e: unknown) => showToast(String(e)))
+              }
+            >
+              {pt('exportCsv')}
+            </Button>
           </>
         }
       />
