@@ -23,13 +23,24 @@ Set in `/opt/ai-homework/.env`, then `systemctl restart ai-homework`:
 
 ## Updating
 
-With Docker Desktop running and a `banwagong` host alias in `~/.ssh/config`:
+Pushing server changes to `main` deploys them: [.github/workflows/server.yml](../../.github/workflows/server.yml) runs the tests, builds a static musl binary and sends it to the server, then checks `https://api.bryht.net/homework/api/health`. It can also be started by hand from the Actions page (**Build and deploy server**).
+
+The workflow's SSH key (secret `DEPLOY_SSH_KEY`) is locked on the server to [ai-homework-deploy](ai-homework-deploy), installed as `/usr/local/sbin/ai-homework-deploy`:
+
+```
+/root/.ssh/authorized_keys:
+command="/usr/local/sbin/ai-homework-deploy",restrict ssh-ed25519 AAAA... github-actions-deploy ai-homework
+```
+
+The script only reads a binary from stdin, checks it runs (as `www-data`), installs it, restarts the service and puts the previous binary back if the health check fails. The key cannot open a shell. To revoke it, delete that line.
+
+Manual fallback, with Docker Desktop running and a `banwagong` host alias in `~/.ssh/config`:
 
 ```powershell
 ./deploy/banwagong/update.ps1
 ```
 
-The script builds, uploads, restarts and checks the health endpoint. The previous binary is kept as `ai-homework.prev`; to roll back:
+Either way the previous binary is kept as `ai-homework.prev`; to roll back:
 
 ```bash
 cd /opt/ai-homework && cp -p ai-homework.prev ai-homework && systemctl restart ai-homework

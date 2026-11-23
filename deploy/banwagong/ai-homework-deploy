@@ -1,0 +1,50 @@
+#!/bin/bash
+# /usr/local/sbin/ai-homework-deploy on BANWAGONG (root:root, 755).
+#
+# Forced command for the GitHub Actions deploy key, so that key can do nothing else:
+#   /root/.ssh/authorized_keys:
+#   command="/usr/local/sbin/ai-homework-deploy",restrict ssh-ed25519 AAAA... github-actions-deploy ai-homework
+#
+# Reads a new server binary on stdin, installs it, restarts the service and checks the health endpoint.
+# If the new binary does not come up, the previous one is put back.
+set -euo pipefail
+
+dir=/opt/ai-homework
+new=$(mktemp "$dir/ai-homework.XXXXXX")
+trap 'rm -f "$new"' EXIT
+
+# The binary is about 14 MB; refuse anything over 64 MB or anything that is not an ELF file.
+head -c 67108864 > "$new"
+size=$(stat -c %s "$new")
+magic=$(head -c 4 "$new" | od -An -tx1 | tr -d ' \n')
+if [ "$size" -lt 1000000 ] || [ "$magic" != "7f454c46" ]; then
+  echo "rejected: not a Linux binary ($size bytes)" >&2
+  exit 1
+fi
+chown www-data:www-data "$new"
+chmod 755 "$new"
+# Runs on this system? Checked as the service user, never as root.
+runuser -u www-data -- "$new" --help > /dev/null
+
+health() {
+  for _ in $(seq 1 30); do
+    curl -fsS http://127.0.0.1:8787/api/health > /dev/null 2>&1 && return 0
+    sleep 1
+  done
+  return 1
+}
+
+cp -p "$dir/ai-homework" "$dir/ai-homework.prev"
+mv -f "$new" "$dir/ai-homework"
+systemctl restart ai-homework
+if health; then
+  echo "deployed: $size bytes, sha256 $(sha256sum "$dir/ai-homework" | cut -c1-16)"
+  exit 0
+fi
+
+echo "the new binary did not come up; rolling back" >&2
+journalctl -u ai-homework -n 30 --no-pager >&2 || true
+cp -p "$dir/ai-homework.prev" "$dir/ai-homework"
+systemctl restart ai-homework
+health && echo "rolled back to the previous binary" >&2
+exit 1
