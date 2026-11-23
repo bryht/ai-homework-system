@@ -1,8 +1,8 @@
 # Tests the server, builds it as a static Linux binary and deploys it to BANWAGONG.
 #
 # One-time setup (Settings → Secrets and variables → Actions → Secrets):
-#   DEPLOY_SSH_KEY      private key whose public half is in the server's /root/.ssh/authorized_keys,
-#                       locked to the deploy script (see deploy/banwagong/ai-homework-deploy)
+#   BANWAGONG_KEY       private SSH key for root on the server. Best: the deploy-only key, whose
+#                       authorized_keys entry is locked to the deploy script (see deploy/banwagong/README.md)
 #   DEPLOY_HOST         server address
 #   DEPLOY_PORT         SSH port
 #   DEPLOY_KNOWN_HOSTS  the server's SSH host key line(s), as in known_hosts
@@ -81,18 +81,19 @@ jobs:
         with:
           name: ai-homework-linux-x86_64
 
-      # The key can only run the deploy script, which reads the binary from stdin, installs it,
-      # restarts the service and rolls back if the health check fails.
+      # Runs the deploy script on the server, which reads the binary from stdin, installs it, restarts
+      # the service and rolls back if the health check fails. With the deploy-only key the server runs
+      # that script whatever command is sent; with an unrestricted key the command below picks it.
       - name: Deploy to BANWAGONG
         env:
-          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KEY: ${{ secrets.BANWAGONG_KEY }}
           HOST: ${{ secrets.DEPLOY_HOST }}
           PORT: ${{ secrets.DEPLOY_PORT }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           for name in SSH_KEY HOST PORT KNOWN_HOSTS; do
             if [ -z "${!name}" ]; then
-              echo "::error::Secret DEPLOY_${name} is not set (see the top of .github/workflows/server.yml)"
+              echo "::error::A deploy secret is missing ($name; see the top of .github/workflows/server.yml)"
               exit 1
             fi
           done
@@ -101,7 +102,7 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -p "$PORT" "root@$HOST" < ai-homework
+            -p "$PORT" "root@$HOST" /usr/local/sbin/ai-homework-deploy < ai-homework
 
       - name: Check through the gateway
         run: curl -fsS --retry 5 --retry-delay 2 "${{ vars.API_ORIGIN }}/api/health"

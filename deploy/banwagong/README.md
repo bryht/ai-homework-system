@@ -25,7 +25,7 @@ Set in `/opt/ai-homework/.env`, then `systemctl restart ai-homework`:
 
 Pushing server changes to `main` deploys them: [.github/workflows/server.yml](../../.github/workflows/server.yml) runs the tests, builds a static musl binary and sends it to the server, then checks `https://api.bryht.net/homework/api/health`. It can also be started by hand from the Actions page (**Build and deploy server**).
 
-The workflow's SSH key (secret `DEPLOY_SSH_KEY`) is locked on the server to [ai-homework-deploy](ai-homework-deploy), installed as `/usr/local/sbin/ai-homework-deploy`:
+The workflow logs in with the secret `BANWAGONG_KEY` and runs [ai-homework-deploy](ai-homework-deploy), installed as `/usr/local/sbin/ai-homework-deploy`. That secret should hold the deploy-only key, whose entry is locked to the script:
 
 ```
 /root/.ssh/authorized_keys:
