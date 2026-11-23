@@ -1,0 +1,22 @@
+# Add to the existing Caddyfile. Use one of the two.
+
+# Subdomain:
+homework-api.example.com {
+	reverse_proxy 127.0.0.1:8787 {
+		# stream AI replies immediately
+		flush_interval -1
+	}
+	request_body {
+		max_size 32MB
+	}
+}
+
+# Path on an existing site (API_ORIGIN = https://example.com/homework):
+# example.com {
+# 	handle_path /homework/* {
+# 		reverse_proxy 127.0.0.1:8787 {
+# 			flush_interval -1
+# 		}
+# 	}
+# 	...existing routes...
+# }

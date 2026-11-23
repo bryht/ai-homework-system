@@ -1,0 +1,32 @@
+# AI Homework backend on a server that already has its own gateway (reverse proxy) and Postgres.
+# Only the app runs here; it listens on 127.0.0.1:8787 and the existing gateway forwards to it.
+#
+#   cp env.example .env   # then fill it in
+#   docker compose pull && docker compose up -d
+#   docker compose exec app ai-homework create-teacher --username wang --name "Mr. Wang"
+
+services:
+  app:
+    image: ghcr.io/bryht/ai-homework-system:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_ENV: production
+    ports:
+      # Not exposed to the internet: only the gateway on this machine talks to it.
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - uploads:/data
+    # Lets the container reach a Postgres running directly on the host (DATABASE_URL host: host.docker.internal).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # If the gateway or Postgres run in Docker on a shared network, join it instead:
+    # networks: [gateway]
+
+volumes:
+  uploads:
+
+# networks:
+#   gateway:
+#     external: true
+#     name: <existing network name>
