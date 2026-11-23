@@ -1,4 +1,3 @@
-import { useSettings } from '../services/settings.js'
 import { authHeaders } from './token.js'
 
 /** Backend address; empty when the API is served from the same origin (Docker Compose). */
@@ -20,14 +19,12 @@ export const setUnauthorizedHandler = (handler: () => void) => {
   onUnauthorized = handler
 }
 
-export const acceptLanguage = () => useSettings.getState().locale
-
-/** 后端 REST 接口；Bearer 令牌登录，错误统一为 ApiFailure（message 已按界面语言本地化） */
+/** Backend REST API with Bearer-token auth; every error becomes an ApiFailure */
 export const api = async <T>(
   path: string,
   options: { method?: string; json?: unknown; body?: BodyInit } = {}
 ): Promise<T> => {
-  const headers: Record<string, string> = { 'Accept-Language': acceptLanguage(), ...authHeaders() }
+  const headers: Record<string, string> = { ...authHeaders() }
   let body = options.body
   if (options.json !== undefined) {
     headers['Content-Type'] = 'application/json'
@@ -42,7 +39,7 @@ export const api = async <T>(
       credentials: 'same-origin',
     })
   } catch {
-    throw new ApiFailure(0, acceptLanguage() === 'zh-CN' ? '网络连接失败' : 'Network error')
+    throw new ApiFailure(0, 'Network error')
   }
   if (!response.ok) {
     let message = response.statusText
@@ -66,7 +63,7 @@ export const api = async <T>(
  */
 export const downloadFile = async (path: string, filename: string) => {
   const response = await fetch(API_BASE + path, {
-    headers: { 'Accept-Language': acceptLanguage(), ...authHeaders() },
+    headers: authHeaders(),
   })
   if (!response.ok) {
     if (response.status === 401) {

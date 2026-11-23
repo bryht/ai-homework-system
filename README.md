@@ -1,37 +1,45 @@
 # AI Homework System
 
-老师布置作业，学生在作业期间使用系统内置的 AI 完成作业。系统记录学生使用 AI 的全过程（提问、上传的文件、AI 的回答），老师据此查看过程、评估作业。
+Teachers set homework, and students use the system's built-in AI while they work on it. The system records the whole process (questions, uploaded files, the AI's answers) so teachers can review how the work was done and assess it.
 
-- 设计文档：[docs/design.md](docs/design.md)
-- 前端基于 [deepseek-ai/chat-demo](https://github.com/deepseek-ai/chat-demo)（MIT）改写
+- Design document: [docs/design.md](docs/design.md)
+- The web app is adapted from [deepseek-ai/chat-demo](https://github.com/deepseek-ai/chat-demo) (MIT)
 
-| 学生：作业聊天 | 老师：完成情况 | 老师：对话回放 |
+| Student: homework chat | Teacher: progress | Teacher: conversation replay |
 | --- | --- | --- |
 | ![](docs/screenshots/student-chat.png) | ![](docs/screenshots/teacher-overview.png) | ![](docs/screenshots/teacher-transcript.png) |
 
-## 功能（第一期）
+## Features (phase 1)
 
-**老师**
-- 创建班级，批量创建学生账号（初始密码只显示一次，可下载 CSV），重置密码
-- 布置作业：开始/截止时间、作业要求（Markdown）、草稿/发布、是否允许迟交
-- 按作业配置 AI：模型、教学模式（引导式 / 讲解式 / 开放式 / 自定义提示词）、联网搜索、文件上传、深度思考、每个学生的 Token 额度
-- 试用 AI：用学生看到的界面预览作业配置
-- 完成情况：每个学生的提问数、Token、活跃天数、最近使用、提交状态
-- 学生详情：按时间回放全部对话（包括重新生成、编辑重发、中途停止的记录），查看附件、提交内容，打分和写评语，导出 CSV
+**Teachers**
+- Create classes, add students in bulk (initial passwords are shown once and can be downloaded as CSV), reset passwords
+- Set homework: start and due times, instructions (Markdown), draft or published, late submissions allowed or not
+- Configure the AI per homework: model, teaching mode (Socratic / explain / open / custom prompt), web search, file uploads, thinking, and a token quota per student
+- Try the AI: preview the homework configuration in the student's view
+- Progress: questions, tokens, active days, last use and submission status for each student
+- Student detail: replay every conversation in order (including regenerated, edited and stopped replies), see attachments and the submission, grade and comment, export CSV
 
-**学生**
-- 作业列表（进行中 / 未开始 / 已截止，剩余时间，提交状态）
-- 作业聊天：chat-demo 原有的体验（流式回答、深度思考、Markdown、公式、代码、上传文件），顶部显示作业要求、截止时间和「对话会被老师查看」的提示
-- 提交作业：文字 + 附件 + 诚信声明，截止前可以修改
+**Students**
+- Homework list (open / upcoming / closed, time remaining, submission status)
+- Homework chat: the chat-demo experience (streaming answers, thinking, Markdown, formulas, code, file uploads), with the instructions, the due time and a "your teacher can see this conversation" notice at the top
+- Submit homework: text, attachments and an honesty statement; editable until the due time
 
-**后端网关**
-- 学生的浏览器只和我们的后端通信，拿不到模型的 API Key
-- 每次请求都按作业配置改写：老师的教学提示词放在系统提示词最前面，学生无法覆盖；按开关去掉联网搜索、深度思考；检查时间窗口和额度
-- 原样流式转发给浏览器，同时把本轮问题、完整回答、用量、耗时存档；上传的文件保留原件
+**Server gateway**
+- Students' browsers only talk to our server and never see a model API key
+- Every request is rewritten according to the homework settings: the teacher's teaching prompt goes first in the system prompt and students cannot override it; web search and thinking are removed when switched off; the time window and quota are checked
+- Replies stream to the browser as they arrive, while the question, full answer, usage and latency are stored; uploaded files are kept in their original form
 
-## 用 Docker Compose 运行（推荐）
+## AI models
 
-需要 Docker（含 Compose）。在仓库根目录：
+Set in `.env` (see [.env.example](.env.example)):
+
+- `OLLAMA_API_KEY`: every chat model on the Ollama account is offered, and teachers pick one per homework. Ollama models do not take file uploads or web search, so those switches are turned off for them.
+- `DEEPSEEK_API_KEY`: DeepSeek's own API.
+- With neither key, homework uses the **mock model**: it calls no external service and its reply shows the teaching prompt the gateway injected, which makes configuration easy to check.
+
+## Running with Docker Compose (recommended)
+
+Requires Docker (with Compose). From the repository root:
 
 ```bash
 docker compose up -d --build
@@ -41,79 +49,77 @@ docker compose up -d --build
 docker compose exec app ai-homework seed
 ```
 
-打开 http://localhost:8787 ，用演示账号登录（密码都是 `demo1234`）：
+Open http://localhost:8787 and sign in with a demo account (password `demo1234` for all):
 
-| 账号 | 角色 |
+| Account | Role |
 | --- | --- |
-| `teacher` | 老师（Ms. Taylor，「Pilot Class」） |
-| `student1` / `student2` / `student3` | 学生 |
+| `teacher` | Teacher (Ms. Taylor, "Pilot Class") |
+| `student1` / `student2` / `student3` | Students |
 
-界面默认英文，登录页和「账号」页可以切换中文。
-
-没有配置 `DEEPSEEK_API_KEY` 时，作业使用**模拟模型**：不调用任何外部服务，回复里会显示网关注入的教学提示词，方便检查配置。要用 DeepSeek：
+To use a real model:
 
 ```bash
 cp .env.example .env
 ```
 
-在 `.env` 里填上 `DEEPSEEK_API_KEY`，然后重新启动：
+Fill in `OLLAMA_API_KEY` or `DEEPSEEK_API_KEY` in `.env`, then restart:
 
 ```bash
 docker compose up -d
 ```
 
-数据存在两个 Docker volume 里：`db-data`（Postgres）和 `uploads`（上传的文件）。完全重置：
+Data lives in two Docker volumes: `db-data` (Postgres) and `uploads` (uploaded files). To reset everything:
 
 ```bash
 docker compose down -v
 ```
 
-创建正式的老师账号（不传 `--password` 会随机生成并打印）：
+Create a real teacher account (a password is generated and printed when `--password` is omitted):
 
 ```bash
 docker compose exec app ai-homework create-teacher --username wang --name "Mr. Wang"
 ```
 
-放到公网时，前面加一层 HTTPS（例如 Caddy），并在 `.env` 里设置 `COOKIE_SECURE=true`。
+On the public internet, put HTTPS in front (Caddy, for example) and set `COOKIE_SECURE=true` in `.env`.
 
-## 前端放到 GitHub Pages（可选）
+## Web app on GitHub Pages (optional)
 
-前端是纯静态页面，可以放在 GitHub Pages（免费，自带 HTTPS），后端单独运行。登录用请求头里的令牌（Bearer token），不依赖跨站 Cookie，Safari 也能用。
+The web app is static, so it can be hosted on GitHub Pages (free, with HTTPS) while the server runs elsewhere. Sign-in uses a Bearer token in a request header rather than cross-site cookies, so it works in Safari too.
 
-**前提：后端要有一个公网 HTTPS 地址。** Pages 是 HTTPS 页面，浏览器不允许它请求 `http://` 的后端。可以：
+**The server needs a public HTTPS address.** Pages is served over HTTPS, and browsers do not let it call an `http://` server. Options:
 
-- 在 VPS 上跑 `docker compose`，前面加 Caddy 自动申请证书；
-- 或者临时用 Cloudflare Tunnel 把本机的 8787 端口暴露出去（`cloudflared tunnel --url http://localhost:8787`，免费，但每次重启地址会变）。
+- run `docker compose` on a VPS with Caddy in front for automatic certificates, or deploy next to an existing gateway (see [deploy/](deploy/));
+- or, temporarily, expose port 8787 with Cloudflare Tunnel (`cloudflared tunnel --url http://localhost:8787`; free, but the address changes on every restart).
 
-设置步骤：
+Setup:
 
-1. 仓库 **Settings → Pages → Build and deployment → Source** 选 **GitHub Actions**。
-2. **Settings → Secrets and variables → Actions → Variables** 新建变量 `API_ORIGIN`，值是后端地址，例如 `https://api.example.com`。
-3. 后端 `.env` 里加上 Pages 的地址，然后重启：
+1. Repository **Settings → Pages → Build and deployment → Source**: **GitHub Actions**.
+2. **Settings → Secrets and variables → Actions → Variables**: add `API_ORIGIN` with the server's address, e.g. `https://api.example.com`.
+3. Allow the Pages site in the server's `.env`, then restart:
 
    ```
-   CORS_ORIGINS=https://bryht.github.io
+   CORS_ORIGINS=https://homework.example.com
    ```
 
-4. 推送到 `main` 分支（或在 Actions 页面手动运行 **Deploy web app to GitHub Pages**），页面会发布到 `https://bryht.github.io/ai-homework-system/`。
+4. Push to the default branch (or run **Deploy web app to GitHub Pages** from the Actions page).
 
-工作流在 `.github/workflows/pages.yml`。本地构建指向其他后端的前端：
+The workflow is `.github/workflows/pages.yml`. To build the web app locally against another server:
 
 ```bash
 API_ORIGIN=https://api.example.com pnpm build
 ```
 
-## 开发
+## Development
 
-后端是 Rust（axum + sqlx + Postgres），前端是 TypeScript（chat-demo 改写）。需要 Rust 1.85+、Node.js 22.12+、pnpm 10。
+The server is Rust (axum + sqlx + Postgres) and the web app is TypeScript (adapted chat-demo). Requires Rust 1.85+, Node.js 22.12+ and pnpm 10.
 
-只用 Docker 跑数据库：
+Run only the database in Docker:
 
 ```bash
 docker compose up -d db
 ```
 
-启动后端（在 `apps/server`，读取仓库根目录的 `.env`，监听 8787）：
+Start the server (in `apps/server`; it reads `.env` from the repository root and listens on 8787):
 
 ```bash
 cp .env.example .env
@@ -123,25 +129,25 @@ cp .env.example .env
 cd apps/server && cargo run
 ```
 
-另开一个终端启动前端开发服务器（http://localhost:8090 ，接口代理到 8787）：
+In another terminal, start the web dev server (http://localhost:8090, API proxied to 8787):
 
 ```bash
 pnpm install && pnpm dev
 ```
 
-演示数据：
+Demo data:
 
 ```bash
 cd apps/server && cargo run -- seed
 ```
 
-测试（需要一个 Postgres，`sqlx::test` 会为每个测试建一个临时数据库）：
+Tests (need a Postgres; `sqlx::test` creates a temporary database per test):
 
 ```bash
 cd apps/server && DATABASE_URL=postgres://homework:homework@localhost:5432/homework cargo test
 ```
 
-前端类型检查和 lint：
+Web type check and lint:
 
 ```bash
 pnpm type && pnpm lint
@@ -149,17 +155,18 @@ pnpm type && pnpm lint
 
 ```
 apps/
-  web/              # chat-demo（git subtree）+ src/platform/ 下的作业系统页面
-  server/           # Rust：REST API、AI 网关、数据库迁移、测试
-packages/shared/    # 前端用的共享类型（和后端 JSON 接口一一对应）
-docs/design.md      # 设计文档
-Dockerfile          # 前端构建 + Rust 编译 + 精简运行镜像
+  web/              # chat-demo (git subtree) + the homework pages in src/platform/
+  server/           # Rust: REST API, AI gateway, database migrations, tests
+packages/shared/    # shared types for the web app (match the server's JSON API)
+deploy/             # deploying next to an existing gateway and Postgres
+docs/design.md      # design document
+Dockerfile          # web build + Rust build + slim runtime image
 docker-compose.yml  # Postgres + app
 ```
 
-数据库表结构在 `apps/server/migrations/`，服务启动时自动执行。
+The database schema is in `apps/server/migrations/` and is applied automatically on start.
 
-合并 chat-demo 上游更新：
+Merging chat-demo updates from upstream:
 
 ```bash
 git subtree pull --prefix apps/web https://github.com/deepseek-ai/chat-demo.git main --squash

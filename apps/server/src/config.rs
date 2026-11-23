@@ -6,6 +6,13 @@ pub struct DeepSeekConfig {
     pub base_url: String,
 }
 
+/// Ollama (ollama.com, or a self-hosted server): every model on the account is offered to teachers.
+#[derive(Clone, Debug)]
+pub struct OllamaConfig {
+    pub api_key: Option<String>,
+    pub base_url: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub port: u16,
@@ -19,6 +26,7 @@ pub struct Config {
     pub session_days: i64,
     pub cookie_secure: bool,
     pub deepseek: DeepSeekConfig,
+    pub ollama: OllamaConfig,
     /// The mock model is enabled automatically when no real model is configured.
     pub enable_mock: bool,
     /// Origins allowed to call the API from another site, e.g. `https://bryht.github.io` for GitHub Pages.
@@ -33,6 +41,8 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let production = var("APP_ENV").as_deref() == Some("production");
         let api_key = var("DEEPSEEK_API_KEY");
+        let ollama_key = var("OLLAMA_API_KEY");
+        let has_real_model = api_key.is_some() || ollama_key.is_some();
         Ok(Self {
             port: var("PORT").map(|p| p.parse()).transpose()?.unwrap_or(8787),
             database_url: var("DATABASE_URL").ok_or_else(|| {
@@ -43,7 +53,7 @@ impl Config {
             timezone: var("APP_TIMEZONE").unwrap_or_else(|| "UTC".into()),
             session_days: var("SESSION_DAYS").map(|d| d.parse()).transpose()?.unwrap_or(14),
             cookie_secure: var("COOKIE_SECURE").map(|v| v == "true").unwrap_or(production),
-            enable_mock: var("ENABLE_MOCK_AI").map(|v| v == "true").unwrap_or(api_key.is_none()),
+            enable_mock: var("ENABLE_MOCK_AI").map(|v| v == "true").unwrap_or(!has_real_model),
             cors_origins: var("CORS_ORIGINS")
                 .map(|v| {
                     v.split(',').map(|o| o.trim().trim_end_matches('/').to_string()).filter(|o| !o.is_empty()).collect()
@@ -53,6 +63,13 @@ impl Config {
                 api_key,
                 base_url: var("DEEPSEEK_BASE_URL")
                     .unwrap_or_else(|| "https://api.deepseek.com".into())
+                    .trim_end_matches('/')
+                    .to_string(),
+            },
+            ollama: OllamaConfig {
+                api_key: ollama_key,
+                base_url: var("OLLAMA_BASE_URL")
+                    .unwrap_or_else(|| "https://ollama.com".into())
                     .trim_end_matches('/')
                     .to_string(),
             },
@@ -70,6 +87,7 @@ impl Config {
             session_days: 365,
             cookie_secure: false,
             deepseek: DeepSeekConfig { api_key: None, base_url: String::new() },
+            ollama: OllamaConfig { api_key: None, base_url: String::new() },
             enable_mock: true,
             cors_origins: vec!["https://school.github.io".into()],
         }

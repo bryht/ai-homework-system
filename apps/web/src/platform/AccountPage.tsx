@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Button } from '../components/base/Button.js'
 import { showToast } from '../components/base/toastState.js'
-import { setLocale, useSettings } from '../services/settings.js'
 import { api } from './api.js'
 import { usePt } from './i18n.js'
 import { useSession } from './session.js'
@@ -10,7 +9,6 @@ import { Card, Field, TextInput, TitleRow, ui } from './ui/components.js'
 export const AccountPage = () => {
   const pt = usePt()
   const user = useSession((s) => s.user)
-  const locale = useSettings((s) => s.locale)
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -45,15 +43,6 @@ export const AccountPage = () => {
               <div className={ui.muted}>
                 {pt('username')}: {user?.username}
               </div>
-            </div>
-            <div className={ui.row}>
-              <Button
-                variant="outlined"
-                size="m"
-                onClick={() => setLocale(locale === 'zh-CN' ? 'en-US' : 'zh-CN')}
-              >
-                {locale === 'zh-CN' ? 'Switch to English' : '切换到中文'}
-              </Button>
             </div>
           </div>
         </Card>

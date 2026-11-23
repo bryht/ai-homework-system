@@ -1,35 +1,25 @@
-import { useSettings } from '../services/settings.js'
 import { chatDemoOverrides } from '../platform/i18n.js'
 import { en } from './en.js'
-import { zh } from './zh.js'
 
-export type TranslationKey = keyof typeof zh
+export type TranslationKey = keyof typeof en
 export type TranslationParams = Record<string, string | number>
 export type TranslationMessage = { key: TranslationKey; params?: TranslationParams }
-/** 带文字链接的提示：link 跟在正文后，在新窗口打开；type 为 error 时前面带错误图标 */
+/** A message with a text link after it (opens in a new window); `type: 'error'` adds an error icon. */
 export type LinkedMessage = TranslationMessage & {
   type?: 'error'
   link?: { key: TranslationKey; href: string }
 }
 
 export const isTranslationKey = (key: unknown): key is TranslationKey =>
-  typeof key === 'string' && Object.hasOwn(zh, key)
+  typeof key === 'string' && Object.hasOwn(en, key)
 
-const createTranslate =
-  (messages: Record<TranslationKey, string>) =>
-  (key: TranslationKey, params?: TranslationParams): string =>
-    messages[key].replace(/\{(\w+)\}/g, (placeholder, name: string) => {
-      const value = params?.[name]
-      return typeof value === 'string' || typeof value === 'number' ? String(value) : placeholder
-    })
+const messages: Record<TranslationKey, string> = { ...en, ...chatDemoOverrides }
 
-const translators = {
-  'zh-CN': createTranslate({ ...zh, ...chatDemoOverrides.zh }),
-  'en-US': createTranslate({ ...en, ...chatDemoOverrides.en }),
-}
-
-/** 组件订阅语言变化；普通函数在调用时读取当前语言。 */
-export const useTranslate = () => useSettings((state) => translators[state.locale])
-
+/** UI text. The app is English only; the lookup stays a function so text can carry parameters. */
 export const translate = (key: TranslationKey, params?: TranslationParams): string =>
-  translators[useSettings.getState().locale](key, params)
+  messages[key].replace(/\{(\w+)\}/g, (placeholder, name: string) => {
+    const value = params?.[name]
+    return typeof value === 'string' || typeof value === 'number' ? String(value) : placeholder
+  })
+
+export const useTranslate = () => translate

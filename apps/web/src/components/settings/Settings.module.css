@@ -133,15 +133,6 @@
   text-align: start;
 }
 
-.provinceSelect {
-  width: 159px;
-}
-
-.locationSelectors > .citySelect {
-  min-width: 120px;
-  width: 120px;
-}
-
 .regionSelect {
   max-width: min(285px, 100%);
 }
@@ -354,11 +345,6 @@
   .locationSelectors {
     width: 100%;
     gap: 12px;
-  }
-
-  .provinceSelect,
-  .citySelect {
-    flex: 1 1 auto;
   }
 
   .apiKey {

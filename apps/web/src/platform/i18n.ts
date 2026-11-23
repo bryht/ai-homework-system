@@ -1,156 +1,5 @@
-import { useSettings } from '../services/settings.js'
-
-/** 作业系统页面的文案。chat-demo 自己的文案仍在 src/i18n，个别需要改的见 chatDemoOverrides */
-const zh = {
-  brand: 'AI 作业系统',
-  loginTitle: '登录',
-  loginSubtitle: '使用老师发给你的账号登录',
-  username: '用户名',
-  password: '密码',
-  signIn: '登录',
-  signingIn: '正在登录…',
-  myHomework: '我的作业',
-  homeworks: '作业',
-  classes: '班级',
-  account: '账号',
-  logout: '退出登录',
-  back: '返回',
-  loading: '加载中…',
-  loadFailed: '加载失败：{message}',
-  retry: '重试',
-  cancel: '取消',
-  save: '保存',
-  saved: '已保存',
-  close: '关闭',
-  create: '创建',
-  edit: '编辑',
-  delete: '删除',
-  copy: '复制',
-  copied: '已复制',
-  phaseUpcoming: '未开始',
-  phaseOpen: '进行中',
-  phaseClosed: '已截止',
-  draft: '草稿',
-  startsAt: '开始 {time}',
-  dueAt: '截止 {time}',
-  remainingDays: '还剩 {n} 天',
-  remainingHours: '还剩 {n} 小时',
-  remainingMinutes: '还剩 {n} 分钟',
-  startsInDays: '{n} 天后开始',
-  startsInHours: '{n} 小时后开始',
-  noHomework: '暂时没有作业',
-  enterHomework: '进入作业',
-  viewHomework: '查看记录',
-  submitted: '已提交',
-  notSubmitted: '未提交',
-  lateTag: '迟交',
-  tokensUsed: 'AI 额度 {used} / {budget}',
-  tokensUsedUnlimited: '已用 {used} Token',
-  homeworkInstructions: '作业要求',
-  submitHomework: '提交作业',
-  resubmit: '修改提交',
-  recordedNotice: '本作业的 AI 对话会被老师查看',
-  backToList: '作业列表',
-  previewNotice: '老师预览：不受时间和额度限制，不计入学生统计',
-  closedNotice: '作业已截止：可以查看对话记录，但不能再向 AI 提问',
-  upcomingNotice: '作业还没有开始',
-  submissionPlaceholder: '写下你的答案和思考过程（支持 Markdown）',
-  attachFiles: '添加附件',
-  uploading: '上传中…',
-  submit: '提交',
-  submitSuccess: '作业已提交',
-  lastSubmitted: '上次提交：{time}',
-  removeFile: '移除',
-  integrityPledge: '我确认这份作业由我自己完成，使用 AI 的部分都在本系统内进行。',
-  changePassword: '修改密码',
-  currentPassword: '当前密码',
-  newPassword: '新密码（至少 8 位）',
-  passwordChanged: '密码已修改',
-  newHomework: '新建作业',
-  previewAi: '试用 AI',
-  overview: '完成情况',
-  exportCsv: '导出 CSV',
-  noClasses: '还没有班级。先创建一个班级并添加学生。',
-  noTeacherHomework: '还没有作业',
-  createClass: '创建班级',
-  className: '班级名称',
-  students: '学生',
-  studentCount: '{n} 名学生',
-  addStudents: '添加学生',
-  addStudentsHint: '每行一个学生：「姓名」或「姓名, 用户名」。不填用户名时自动生成。',
-  credentialsTitle: '账号和初始密码',
-  credentialsHint: '密码只显示这一次。请复制或下载后发给学生，学生登录后可以自己修改。',
-  downloadCsv: '下载 CSV',
-  resetPassword: '重置密码',
-  removeFromClass: '移出班级',
-  confirmRemove: '确定把 {name} 移出班级？已有的对话记录会保留。',
-  existingAccount: '已有账号，已加入班级',
-  name: '姓名',
-  title: '标题',
-  klass: '班级',
-  description: '作业要求（支持 Markdown）',
-  startAt: '开始时间',
-  dueAt2: '截止时间',
-  allowLate: '允许截止后迟交（会标记为迟交）',
-  publishNow: '发布，学生可见',
-  aiSettings: 'AI 设置',
-  model: '模型',
-  teachingMode: '教学模式',
-  modeSocratic: '引导式：不直接给答案',
-  modeExplain: '讲解式：讲概念和例题',
-  modeOpen: '开放式：可以直接回答',
-  modeCustom: '自定义',
-  systemPrompt: '教学提示词',
-  systemPromptHint:
-    '学生看不到这段提示词。网关会把它和作业要求放在系统提示词最前面，学生无法覆盖。',
-  allowWebSearch: '允许联网搜索',
-  allowFileUpload: '允许上传文件',
-  allowThinking: '允许深度思考',
-  tokenBudget: '每个学生的 Token 额度',
-  tokenBudgetHint: '留空表示不限。参考：一轮问答通常几百到几千 Token。',
-  mockModelHint: '模拟模型只用于本地测试，不会调用真实 AI。',
-  colStudent: '学生',
-  colTurns: '提问',
-  colTokens: 'Token',
-  colActiveDays: '活跃天数',
-  colLastActive: '最近使用',
-  colSubmission: '提交',
-  colScore: '得分',
-  never: '未使用',
-  view: '查看',
-  summarySubmitted: '已提交 {n} / {total}',
-  summaryActive: '用过 AI {n} / {total}',
-  usedAi: '用过 AI',
-  tabConversations: '对话记录',
-  tabSubmission: '提交内容',
-  grade: '评分',
-  score: '分数',
-  comment: '评语',
-  saveGrade: '保存评分',
-  gradedAt: '评分时间 {time}',
-  noConversations: '这个学生还没有使用 AI',
-  noSubmission: '还没有提交',
-  untitledConversation: '未命名对话',
-  turnCount: '{n} 轮',
-  kindNew: '提问',
-  kindEdit: '编辑后重发',
-  kindRegenerate: '重新生成',
-  kindContinue: '继续生成',
-  statusAborted: '学生中途停止了生成',
-  statusError: '出错：{message}',
-  statusStreaming: '生成中或连接中断',
-  thinkingLabel: '思考过程',
-  searchLabel: '联网搜索：{query}',
-  readLinkLabel: '阅读链接：{url}',
-  searchResults: '{n} 条搜索结果',
-  tokensLabel: '输入 {input} / 输出 {output} Token',
-  attachments: '附件',
-  wrongCredentials: '用户名或密码错误',
-} as const
-
-export type PlatformKey = keyof typeof zh
-
-const en: Record<PlatformKey, string> = {
+/** Text for the homework pages. chat-demo's own text is in src/i18n; the few changed there are in chatDemoOverrides. */
+const en = {
   brand: 'AI Homework',
   loginTitle: 'Sign in',
   loginSubtitle: 'Use the account your teacher gave you',
@@ -301,47 +150,28 @@ const en: Record<PlatformKey, string> = {
   wrongCredentials: 'Wrong username or password',
 }
 
+export type PlatformKey = keyof typeof en
+
 type Params = Record<string, string | number>
-
-const format = (text: string, params?: Params) =>
-  text.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
-    params && name in params ? String(params[name]) : placeholder
-  )
-
-const dictionaries = { 'zh-CN': zh, 'en-US': en } as const
 
 export type Pt = (key: PlatformKey, params?: Params) => string
 
-const translators: Record<keyof typeof dictionaries, Pt> = {
-  'zh-CN': (key, params) => format(zh[key], params),
-  'en-US': (key, params) => format(en[key], params),
-}
+export const pt: Pt = (key, params) =>
+  en[key].replace(/\{(\w+)\}/g, (placeholder, name: string) =>
+    params && name in params ? String(params[name]) : placeholder
+  )
 
-export const usePt = (): Pt => useSettings((state) => translators[state.locale])
+export const usePt = (): Pt => pt
 
-export const pt: Pt = (key, params) => translators[useSettings.getState().locale](key, params)
-
-/** 覆盖 chat-demo 的部分文案（品牌名、API Key 相关提示改成登录） */
+/** Overrides for chat-demo text (brand name; API key messages become sign-in messages). */
 export const chatDemoOverrides = {
-  zh: {
-    appName: 'AI 作业助手',
-    welcomeMessageChat250808: '这份作业，你想从哪里开始？',
-    replyInvalidApiKey: '登录已过期，请重新登录',
-    changeApiKey: '重新登录',
-    apiKeyInvalidRetry: '登录已过期，请重新登录',
-    deleteSessionWithFilesDescription: '只会删除本机浏览器里的这段对话；老师端的对话存档不受影响。',
-    deleteAllSessionsModalDescription:
-      '只会清空本机浏览器里的对话和草稿；老师端的对话存档不受影响。',
-  },
-  en: {
-    appName: 'AI Homework',
-    welcomeMessageChat250808: 'Where would you like to start on this homework?',
-    replyInvalidApiKey: 'Your session has expired. Please sign in again.',
-    changeApiKey: 'Sign in again',
-    apiKeyInvalidRetry: 'Your session has expired. Please sign in again.',
-    deleteSessionWithFilesDescription:
-      'This only removes the conversation from this browser. The copy your teacher can see is kept.',
-    deleteAllSessionsModalDescription:
-      'This only clears conversations and drafts in this browser. The copies your teacher can see are kept.',
-  },
-} as const
+  appName: 'AI Homework',
+  welcomeMessageChat250808: 'Where would you like to start on this homework?',
+  replyInvalidApiKey: 'Your session has expired. Please sign in again.',
+  changeApiKey: 'Sign in again',
+  apiKeyInvalidRetry: 'Your session has expired. Please sign in again.',
+  deleteSessionWithFilesDescription:
+    'This only removes the conversation from this browser. The copy your teacher can see is kept.',
+  deleteAllSessionsModalDescription:
+    'This only clears conversations and drafts in this browser. The copies your teacher can see are kept.',
+}

@@ -2,15 +2,15 @@ import { create } from 'zustand'
 import type { TtsVoice } from './api/speech.js'
 import { normalizeLocation, type UserLocation } from './location.js'
 
-export type Locale = 'zh-CN' | 'en-US'
+/** The app is English only; Intl formatting uses this locale. */
+export const LOCALE = 'en-US'
 
-/** 主题偏好；默认跟随系统 */
+/** Theme preference; follows the system by default */
 export type ThemePreference = 'light' | 'dark' | 'system'
 
-/** 本机设置，存 localStorage：API Key、语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态 */
+/** Local settings kept in localStorage: API key, theme, location, read-aloud voice, thinking and search switches, sidebar state */
 type Settings = {
   apiKey: string | null
-  locale: Locale
   themePreference: ThemePreference
   location: UserLocation | null
   ttsVoice: TtsVoice
@@ -21,7 +21,6 @@ type Settings = {
 
 const KEYS = {
   apiKey: 'chat-demo:api-key',
-  locale: 'chat-demo:locale',
   location: 'chat-demo:location',
   themePreference: 'chat-demo:theme-preference',
   ttsVoice: 'chat-demo:tts-voice',
@@ -46,21 +45,8 @@ const write = (key: string, value: string | null) => {
       localStorage.setItem(key, value)
     }
   } catch {
-    // 存储不可用时只在内存中生效
+    // Storage unavailable: the setting only lasts in memory
   }
-}
-
-/** 位置选择模式跟随浏览器语言，与应用内选择的界面语言无关。 */
-export const isChineseBrowser = (): boolean =>
-  (typeof navigator === 'undefined' ? 'zh' : navigator.language).toLowerCase().startsWith('zh')
-
-const initialLocale = (): Locale => {
-  const saved = read(KEYS.locale)
-  if (saved === 'zh-CN' || saved === 'en-US') {
-    return saved
-  }
-  // AI Homework: English by default; 中文 can be chosen on the sign-in and account pages
-  return 'en-US'
 }
 
 const initialLocation = (): UserLocation | null => {
@@ -69,28 +55,23 @@ const initialLocation = (): UserLocation | null => {
     if (!location) {
       return null
     }
-    return isChineseBrowser()
-      ? location.region === 'CN' && location.province
-        ? location
-        : null
-      : { region: location.region }
+    return { region: location.region }
   } catch {
     return null
   }
 }
 
-/** 未保存过时跟随系统 */
+/** Follows the system until a theme is saved */
 const initialThemePreference = (): ThemePreference => {
   const saved = read(KEYS.themePreference)
   return saved === 'light' || saved === 'dark' ? saved : 'system'
 }
 
-/** 未保存过时使用服务端默认音色 stella（海星） */
+/** The server default voice, stella, until one is saved */
 const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide' : 'stella')
 
 export const useSettings = create<Settings>(() => ({
   apiKey: read(KEYS.apiKey),
-  locale: initialLocale(),
   location: initialLocation(),
   themePreference: initialThemePreference(),
   ttsVoice: initialTtsVoice(),
@@ -98,11 +79,6 @@ export const useSettings = create<Settings>(() => ({
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
 }))
-
-export const setLocale = (locale: Locale) => {
-  write(KEYS.locale, locale)
-  useSettings.setState({ locale })
-}
 
 export const setLocation = (value: UserLocation | null) => {
   const location = normalizeLocation(value)

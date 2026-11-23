@@ -67,6 +67,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Serve => {
             let providers = ProviderRegistry::from_config(&config);
+            // Ollama's model list comes from the account: load it before serving, then keep it current.
+            let loaded = providers.refresh_models().await;
+            providers.spawn_model_refresh(loaded);
             let storage = Arc::new(DiskStorage::new(config.data_dir.join("uploads")));
             let models: Vec<String> = providers.models().into_iter().map(|m| m.id).collect();
             let port = config.port;

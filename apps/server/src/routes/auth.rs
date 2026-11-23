@@ -36,7 +36,7 @@ async fn login(
 ) -> AppResult<impl IntoResponse> {
     let username = body.username.trim().to_lowercase();
     if username.is_empty() || body.password.is_empty() {
-        return Err(AppError::bad_request("Username and password are required", "请输入用户名和密码"));
+        return Err(AppError::bad_request("Username and password are required"));
     }
     let ip = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()).unwrap_or("");
     let key = format!("{ip}:{username}");
@@ -46,7 +46,6 @@ async fn login(
             StatusCode::TOO_MANY_REQUESTS,
             "rate_limit_error",
             "Too many attempts. Try again in 10 minutes.",
-            "尝试次数过多，请 10 分钟后再试",
         ));
     }
     let row =
@@ -68,7 +67,7 @@ async fn login(
 }
 
 fn wrong_credentials() -> AppError {
-    AppError::new(StatusCode::UNAUTHORIZED, "authentication_error", "Wrong username or password", "用户名或密码错误")
+    AppError::new(StatusCode::UNAUTHORIZED, "authentication_error", "Wrong username or password")
 }
 
 async fn logout(State(state): State<AppState>, headers: HeaderMap) -> AppResult<impl IntoResponse> {
@@ -93,12 +92,12 @@ async fn change_password(
     JsonBody(body): JsonBody<PasswordBody>,
 ) -> AppResult<impl IntoResponse> {
     if body.new_password.chars().count() < 8 || body.new_password.len() > 200 {
-        return Err(AppError::bad_request("The new password must be at least 8 characters", "新密码至少 8 位"));
+        return Err(AppError::bad_request("The new password must be at least 8 characters"));
     }
     let stored: String =
         sqlx::query_scalar("SELECT password_hash FROM users WHERE id = $1").bind(&user.id).fetch_one(&state.db).await?;
     if !verify_password(&body.current_password, &stored).await {
-        return Err(AppError::bad_request("Current password is incorrect", "当前密码不正确"));
+        return Err(AppError::bad_request("Current password is incorrect"));
     }
     sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
         .bind(hash_password(&body.new_password).await?)

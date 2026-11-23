@@ -18,7 +18,7 @@ pub struct HomeworkAccess {
 }
 
 fn homework_not_found() -> AppError {
-    AppError::not_found("Homework not found", "作业不存在")
+    AppError::not_found("Homework not found")
 }
 
 pub async fn is_member(db: &PgPool, class_id: &str, student_id: &str) -> AppResult<bool> {

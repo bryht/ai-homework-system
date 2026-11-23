@@ -93,35 +93,43 @@ fn check_fields(state: &AppState, body: &HomeworkBody) -> AppResult<()> {
     if let Some(title) = &body.title {
         let len = title.trim().chars().count();
         if len == 0 || len > 200 {
-            return Err(AppError::bad_request("Title must be 1-200 characters", "标题需要 1–200 个字"));
+            return Err(AppError::bad_request("Title must be 1-200 characters"));
         }
     }
     if body.description.as_ref().is_some_and(|d| d.chars().count() > 50_000) {
-        return Err(AppError::bad_request("Instructions are too long", "作业要求太长"));
+        return Err(AppError::bad_request("Instructions are too long"));
     }
     if body.status.as_deref().is_some_and(|s| s != "draft" && s != "published") {
-        return Err(AppError::bad_request("Invalid status", "状态无效"));
+        return Err(AppError::bad_request("Invalid status"));
     }
     if let Some(ai) = &body.ai_config {
         if state.providers.for_model(&ai.model).is_none() {
-            return Err(AppError::bad_request(
-                format!("Model \"{}\" is not available", ai.model),
-                format!("模型「{}」不可用", ai.model),
-            ));
+            return Err(AppError::bad_request(format!("Model \"{}\" is not available", ai.model)));
         }
         if ai.system_prompt.chars().count() > 20_000 {
-            return Err(AppError::bad_request("The teaching prompt is too long", "教学提示词太长"));
+            return Err(AppError::bad_request("The teaching prompt is too long"));
         }
         if ai.token_budget.is_some_and(|b| b <= 0) {
-            return Err(AppError::bad_request("The token quota must be positive", "Token 额度必须大于 0"));
+            return Err(AppError::bad_request("The token quota must be positive"));
         }
     }
     Ok(())
 }
 
+/// Turns off switches the chosen model cannot honour (e.g. file uploads on an Ollama model), so students
+/// never get an option that fails. The editor greys these out but keeps their old value.
+fn fit_to_model(state: &AppState, mut ai: AiConfig) -> AiConfig {
+    if let Some(model) = state.providers.model(&ai.model) {
+        ai.allow_file_upload &= model.supports_files;
+        ai.allow_thinking &= model.supports_thinking;
+        ai.allow_web_search &= model.supports_web_search;
+    }
+    ai
+}
+
 fn check_window(start_at: DateTime<Utc>, due_at: DateTime<Utc>) -> AppResult<()> {
     if due_at <= start_at {
-        return Err(AppError::bad_request("The due date must be after the start date", "截止时间必须晚于开始时间"));
+        return Err(AppError::bad_request("The due date must be after the start date"));
     }
     Ok(())
 }
@@ -133,7 +141,7 @@ async fn create(
 ) -> AppResult<impl IntoResponse> {
     let teacher = user.require(Role::Teacher)?;
     check_fields(&state, &body)?;
-    let missing = || AppError::bad_request("Missing required fields", "缺少必填项");
+    let missing = || AppError::bad_request("Missing required fields");
     let class_id = body.class_id.clone().ok_or_else(missing)?;
     let (Some(title), Some(start_at), Some(due_at), Some(ai_config)) =
         (body.title.clone(), body.start_at, body.due_at, body.ai_config.clone())
@@ -143,7 +151,7 @@ async fn create(
     let class = load_class(&state.db, &class_id)
         .await?
         .filter(|c| c.teacher_id == teacher.id)
-        .ok_or_else(|| AppError::not_found("Class not found", "班级不存在"))?;
+        .ok_or_else(|| AppError::not_found("Class not found"))?;
     check_window(start_at, due_at)?;
     let now = state.clock.now();
     let row = sqlx::query_as::<_, HomeworkRow>(
@@ -159,7 +167,7 @@ async fn create(
     .bind(due_at)
     .bind(body.status.unwrap_or_else(|| "draft".into()))
     .bind(body.allow_late_submission.unwrap_or(false))
-    .bind(DbJson(&ai_config))
+    .bind(DbJson(fit_to_model(&state, ai_config)))
     .bind(now)
     .fetch_one(&state.db)
     .await?;
@@ -207,7 +215,7 @@ async fn update(
     .bind(due_at)
     .bind(body.status.unwrap_or(current.status))
     .bind(body.allow_late_submission.unwrap_or(current.allow_late_submission))
-    .bind(DbJson(body.ai_config.unwrap_or(current.ai_config.0)))
+    .bind(DbJson(fit_to_model(&state, body.ai_config.unwrap_or(current.ai_config.0))))
     .bind(now)
     .fetch_one(&state.db)
     .await?;
@@ -329,7 +337,7 @@ async fn teacher_student(
         .await?;
     match student {
         Some(student) if is_member(&state.db, &access.class.id, student_id).await? => Ok((access, student)),
-        _ => Err(AppError::not_found("Student is not in this class", "学生不在这个班级")),
+        _ => Err(AppError::not_found("Student is not in this class")),
     }
 }
 
@@ -412,7 +420,7 @@ async fn save_grade(
 ) -> AppResult<impl IntoResponse> {
     let (_, student) = teacher_student(&state, &user, &id, &student_id).await?;
     if body.score.is_some_and(|s| !(0.0..=1000.0).contains(&s)) || body.comment.chars().count() > 20_000 {
-        return Err(AppError::bad_request("Invalid score or comment", "分数或评语无效"));
+        return Err(AppError::bad_request("Invalid score or comment"));
     }
     sqlx::query(
         "INSERT INTO evaluations (id, homework_id, student_id, teacher_score, teacher_comment, graded_at) \
@@ -450,17 +458,17 @@ async fn submit(
     let homework = access.homework;
     let now = state.clock.now();
     if now < homework.start_at {
-        return Err(AppError::forbidden("This homework has not started yet", "作业还没有开始"));
+        return Err(AppError::forbidden("This homework has not started yet"));
     }
     let is_late = now > homework.due_at;
     if is_late && !homework.allow_late_submission {
-        return Err(AppError::forbidden("This homework is closed for submissions", "作业已截止，不能再提交"));
+        return Err(AppError::forbidden("This homework is closed for submissions"));
     }
     if body.content.chars().count() > 200_000 || body.file_ids.len() > 20 {
-        return Err(AppError::bad_request("The submission is too large", "提交内容太长"));
+        return Err(AppError::bad_request("The submission is too large"));
     }
     if body.content.trim().is_empty() && body.file_ids.is_empty() {
-        return Err(AppError::bad_request("The submission is empty", "提交内容不能为空"));
+        return Err(AppError::bad_request("The submission is empty"));
     }
     let unique: HashSet<&String> = body.file_ids.iter().collect();
     let owned = load_files(&state.db, &body.file_ids)
@@ -471,7 +479,7 @@ async fn submit(
         })
         .count();
     if owned != unique.len() {
-        return Err(AppError::bad_request("Invalid attachment, please upload it again", "附件无效，请重新上传"));
+        return Err(AppError::bad_request("Invalid attachment, please upload it again"));
     }
     sqlx::query(
         "INSERT INTO submissions (id, homework_id, student_id, content, file_ids, is_late, submitted_at, updated_at) \
@@ -499,7 +507,7 @@ async fn upload_submission_file(
     let student = user.require(Role::Student)?;
     let homework = load_homework_for(&state, &id, &student).await?.homework;
     if state.clock.now() > homework.due_at && !homework.allow_late_submission {
-        return Err(AppError::forbidden("This homework is closed", "作业已截止"));
+        return Err(AppError::forbidden("This homework is closed"));
     }
     let file = read_file_field(multipart).await?;
     let row = save_upload(&state, &student.id, &homework.id, "submission", file).await?;

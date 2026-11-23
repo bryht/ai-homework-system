@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Button } from '../components/base/Button.js'
-import { setLocale, useSettings } from '../services/settings.js'
 import { usePt } from './i18n.js'
 import { login } from './session.js'
 import { Field, TextInput, ui } from './ui/components.js'
@@ -8,7 +7,6 @@ import styles from './LoginPage.module.css'
 
 export const LoginPage = () => {
   const pt = usePt()
-  const locale = useSettings((s) => s.locale)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -71,13 +69,6 @@ export const LoginPage = () => {
         <Button type="submit" block disabled={pending || !username.trim() || !password}>
           {pending ? pt('signingIn') : pt('signIn')}
         </Button>
-        <button
-          type="button"
-          className={styles.locale}
-          onClick={() => setLocale(locale === 'zh-CN' ? 'en-US' : 'zh-CN')}
-        >
-          {locale === 'zh-CN' ? 'English' : '中文'}
-        </button>
       </form>
     </div>
   )

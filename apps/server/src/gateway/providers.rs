@@ -4,7 +4,10 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{StreamExt, stream::BoxStream};
 use serde_json::{Value, json};
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
 pub type ByteStream = BoxStream<'static, Result<Bytes, std::io::Error>>;
 
@@ -38,6 +41,25 @@ pub trait Provider: Send + Sync {
     fn models(&self) -> Vec<ModelOption>;
     async fn create_message(&self, body: Value, has_files: bool) -> anyhow::Result<Upstream>;
     async fn upload_file(&self, file: UpstreamFile) -> Result<String, UpstreamError>;
+    /// Reloads the model list, for providers whose models come from the upstream account.
+    async fn refresh_models(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+/// A streaming Messages API response: the event stream on success, otherwise the provider's error as-is.
+async fn into_upstream(response: reqwest::Response) -> anyhow::Result<Upstream> {
+    let status = response.status();
+    if !status.is_success() {
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("application/json")
+            .to_string();
+        return Ok(Upstream::Failed { status: status.as_u16(), content_type, body: response.text().await? });
+    }
+    Ok(Upstream::Stream(response.bytes_stream().map(|r| r.map_err(std::io::Error::other)).boxed()))
 }
 
 fn model(id: &str, label: &str, provider: &str, web_search: bool) -> ModelOption {
@@ -90,18 +112,7 @@ impl Provider for DeepSeek {
         if has_files {
             request = request.header("anthropic-beta", FILES_BETA);
         }
-        let response = request.send().await?;
-        let status = response.status();
-        if !status.is_success() {
-            let content_type = response
-                .headers()
-                .get(reqwest::header::CONTENT_TYPE)
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("application/json")
-                .to_string();
-            return Ok(Upstream::Failed { status: status.as_u16(), content_type, body: response.text().await? });
-        }
-        Ok(Upstream::Stream(response.bytes_stream().map(|r| r.map_err(std::io::Error::other)).boxed()))
+        into_upstream(request.send().await?).await
     }
 
     async fn upload_file(&self, file: UpstreamFile) -> Result<String, UpstreamError> {
@@ -135,6 +146,118 @@ impl Provider for DeepSeek {
     }
 }
 
+/// Ollama (ollama.com, or a self-hosted server) through its Anthropic-compatible Messages API.
+/// Every chat model on the account is offered; teachers pick one per homework. The list is loaded
+/// from the account at startup and refreshed in the background (see [`ProviderRegistry::spawn_model_refresh`]).
+pub struct Ollama {
+    client: reqwest::Client,
+    api_key: String,
+    base: String,
+    models: RwLock<Vec<ModelOption>>,
+}
+
+impl Ollama {
+    pub fn new(api_key: String, base_url: &str) -> Self {
+        Self { client: reqwest::Client::new(), api_key, base: base_url.to_string(), models: RwLock::default() }
+    }
+
+    async fn fetch_json(&self, request: reqwest::RequestBuilder) -> anyhow::Result<Value> {
+        let response = request.bearer_auth(&self.api_key).timeout(Duration::from_secs(20)).send().await?;
+        let status = response.status();
+        if !status.is_success() {
+            anyhow::bail!("HTTP {status}: {}", response.text().await.unwrap_or_default());
+        }
+        Ok(response.json().await?)
+    }
+
+    /// What the model can do (`completion`, `thinking`, `vision`, ...), from `/api/show`.
+    async fn capabilities(&self, name: &str) -> Vec<String> {
+        let request = self.client.post(format!("{}/api/show", self.base)).json(&json!({ "model": name }));
+        match self.fetch_json(request).await {
+            Ok(show) => show["capabilities"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|c| c.as_str().map(str::to_string))
+                .collect(),
+            Err(e) => {
+                tracing::warn!("ollama: no capabilities for {name}: {e:#}");
+                vec!["completion".into()]
+            }
+        }
+    }
+}
+
+#[async_trait]
+impl Provider for Ollama {
+    fn id(&self) -> &'static str {
+        "ollama"
+    }
+
+    fn models(&self) -> Vec<ModelOption> {
+        self.models.read().expect("model list lock").clone()
+    }
+
+    async fn create_message(&self, mut body: Value, _has_files: bool) -> anyhow::Result<Upstream> {
+        body["stream"] = json!(true);
+        let response = self
+            .client
+            .post(format!("{}/v1/messages", self.base))
+            .bearer_auth(&self.api_key)
+            .header("accept", "text/event-stream")
+            .json(&body)
+            .send()
+            .await?;
+        into_upstream(response).await
+    }
+
+    /// Never reached: file uploads are switched off for Ollama models when a homework is saved.
+    async fn upload_file(&self, _file: UpstreamFile) -> Result<String, UpstreamError> {
+        let message = "This model does not accept file attachments";
+        Err(UpstreamError {
+            status: 400,
+            body: json!({ "type": "error", "error": { "type": "invalid_request_error", "message": message } })
+                .to_string(),
+        })
+    }
+
+    async fn refresh_models(&self) -> anyhow::Result<()> {
+        let tags = self.fetch_json(self.client.get(format!("{}/api/tags", self.base))).await?;
+        let names: Vec<String> = tags["models"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|m| m["name"].as_str().map(str::to_string))
+            .collect();
+        let mut models: Vec<ModelOption> = futures::stream::iter(names)
+            .map(|name| async move {
+                let capabilities = self.capabilities(&name).await;
+                let can = |c: &str| capabilities.iter().any(|x| x == c);
+                // Embedding-only models cannot chat.
+                can("completion").then(|| ModelOption {
+                    id: name.clone(),
+                    label: name,
+                    provider: "ollama".into(),
+                    supports_thinking: can("thinking"),
+                    // Ollama has no Files API and does not run Anthropic's server-side web search.
+                    supports_web_search: false,
+                    supports_files: false,
+                })
+            })
+            .buffered(6)
+            .filter_map(futures::future::ready)
+            .collect()
+            .await;
+        if models.is_empty() {
+            anyhow::bail!("the account lists no chat models");
+        }
+        // DeepSeek models first (the family this app was built around), then by name.
+        models.sort_by_key(|m| (!m.id.starts_with("deepseek"), m.id.clone()));
+        *self.models.write().expect("model list lock") = models;
+        Ok(())
+    }
+}
+
 fn text_of(content: &Value) -> String {
     match content {
         Value::String(s) => s.clone(),
@@ -162,7 +285,8 @@ impl Provider for Mock {
     }
 
     fn models(&self) -> Vec<ModelOption> {
-        vec![model("mock", "Mock (local testing)", "mock", false)]
+        // Accepts every switch (it ignores tools) so teachers can try all settings locally.
+        vec![model("mock", "Mock (local testing)", "mock", true)]
     }
 
     async fn create_message(&self, body: Value, _has_files: bool) -> anyhow::Result<Upstream> {
@@ -174,29 +298,19 @@ impl Provider for Mock {
             .map(|blocks| blocks.iter().filter(|b| b["type"] == "image" || b["type"] == "document").count())
             .unwrap_or(0);
         let system = body["system"].as_str().unwrap_or("").to_string();
-        let chinese = format!("{question}{system}").chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c));
         let thinking = body["thinking"]["type"] == "enabled";
         let first_line = system.lines().find(|l| !l.trim().is_empty()).unwrap_or("").to_string();
         let quoted = if question.is_empty() {
-            (if chinese { "（空）" } else { "(empty)" }).to_string()
+            "(empty)".to_string()
         } else {
             question.chars().take(200).collect::<String>().replace('\n', "\n> ")
         };
-        let reply = if chinese {
-            let files = if file_count > 0 { format!("\n收到 {file_count} 个附件。\n") } else { String::new() };
-            format!(
-                "**（模拟回复）** 这是本地开发用的模拟模型，没有调用真实的 AI。\n\n你的问题：\n> {quoted}\n{files}\n\
-                 网关注入的教学提示词（第一行）：「{first_line}」\n\n配置 `DEEPSEEK_API_KEY` 后，作业会使用真实的 DeepSeek 模型。"
-            )
-        } else {
-            let files =
-                if file_count > 0 { format!("\nReceived {file_count} attachment(s).\n") } else { String::new() };
-            format!(
-                "**(Mock reply)** This is the local mock model. No real AI was called.\n\nYour question:\n> {quoted}\n{files}\n\
-                 Teaching prompt injected by the gateway (first line): \"{first_line}\"\n\n\
-                 Set `DEEPSEEK_API_KEY` to use the real DeepSeek model."
-            )
-        };
+        let files = if file_count > 0 { format!("\nReceived {file_count} attachment(s).\n") } else { String::new() };
+        let reply = format!(
+            "**(Mock reply)** This is the local mock model. No real AI was called.\n\nYour question:\n> {quoted}\n{files}\n\
+             Teaching prompt injected by the gateway (first line): \"{first_line}\"\n\n\
+             Set `OLLAMA_API_KEY` or `DEEPSEEK_API_KEY` to use a real model."
+        );
         let input_tokens = ((system.len() + body["messages"].to_string().len()) / 3) as i64;
         let output_tokens = (reply.chars().count() / 2).max(1) as i64;
         let title = (body["title"]["enabled"] == true).then(|| {
@@ -216,7 +330,7 @@ impl Provider for Mock {
             }))));
             let mut index = 0;
             if thinking {
-                let thought = if chinese { "模拟模型正在“思考”……" } else { "The mock model is \"thinking\"..." };
+                let thought = "The mock model is \"thinking\"...";
                 for (name, data) in [
                     ("content_block_start", json!({ "type": "content_block_start", "index": index, "content_block": { "type": "thinking", "thinking": "", "signature": "" } })),
                     ("content_block_delta", json!({ "type": "content_block_delta", "index": index, "delta": { "type": "thinking_delta", "thinking": thought } })),
@@ -269,14 +383,45 @@ impl ProviderRegistry {
         if let Some(key) = &config.deepseek.api_key {
             providers.push(Arc::new(DeepSeek::new(key.clone(), &config.deepseek.base_url)));
         }
+        if let Some(key) = &config.ollama.api_key {
+            providers.push(Arc::new(Ollama::new(key.clone(), &config.ollama.base_url)));
+        }
         if config.enable_mock {
             providers.push(Arc::new(Mock::default()));
         }
         Self { providers }
     }
 
+    /// Reloads model lists that come from the upstream account. A failed load keeps the previous list.
+    /// Returns whether every provider loaded.
+    pub async fn refresh_models(&self) -> bool {
+        let mut ok = true;
+        for provider in &self.providers {
+            if let Err(e) = provider.refresh_models().await {
+                tracing::warn!("could not load the {} model list: {e:#}", provider.id());
+                ok = false;
+            }
+        }
+        ok
+    }
+
+    /// Keeps model lists current: every 10 minutes, or every 30 seconds while a load is failing.
+    pub fn spawn_model_refresh(&self, mut last_ok: bool) {
+        let registry = self.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(if last_ok { 600 } else { 30 })).await;
+                last_ok = registry.refresh_models().await;
+            }
+        });
+    }
+
     pub fn models(&self) -> Vec<ModelOption> {
         self.providers.iter().flat_map(|p| p.models()).collect()
+    }
+
+    pub fn model(&self, id: &str) -> Option<ModelOption> {
+        self.models().into_iter().find(|m| m.id == id)
     }
 
     pub fn for_model(&self, model: &str) -> Option<Arc<dyn Provider>> {

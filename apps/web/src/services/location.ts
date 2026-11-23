@@ -1,54 +1,24 @@
-import { cityNames, regionCodes, regionNameOverrides, provinceNames } from './locationData.js'
+import { regionCodes, regionNameOverrides } from './locationData.js'
 
 export { regionCodes } from './locationData.js'
 
-export const provinces = Object.entries(provinceNames).map(([code, name]) => ({
-  code,
-  name,
-  cities: Object.entries(cityNames)
-    .filter(([city]) => city.startsWith(code.slice(0, 2)))
-    .map(([code, name]) => ({ code, name })),
-}))
-
+/** The user's country or region, told to the model so answers can fit local context. */
 export type UserLocation = {
   region: string
-  province?: string
-  city?: string
 }
 
 const regions = new Set(regionCodes)
-const regionNames = {
-  'zh-CN': new Intl.DisplayNames(['zh-CN'], { type: 'region' }),
-  'en-US': new Intl.DisplayNames(['en-US'], { type: 'region' }),
-}
+const regionNames = new Intl.DisplayNames(['en-US'], { type: 'region' })
 
-export const getRegionName = (code: string, locale: 'zh-CN' | 'en-US'): string =>
-  regions.has(code)
-    ? (regionNameOverrides[locale][code] ?? regionNames[locale].of(code) ?? code)
-    : ''
+export const getRegionName = (code: string): string =>
+  regions.has(code) ? (regionNameOverrides[code] ?? regionNames.of(code) ?? code) : ''
 
+/** A stored location, or null when it is not a known region. Older saved values may also carry
+ * a province and city; only the region is kept. */
 export const normalizeLocation = (value: unknown): UserLocation | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
-  const location = value as Record<string, unknown>
-  const { region, province, city } = location
-  if (typeof region !== 'string' || !regions.has(region)) {
-    return null
-  }
-  if (region !== 'CN') {
-    return { region }
-  }
-  if (province === undefined) {
-    return city === undefined ? { region } : null
-  }
-  const selectedProvince = provinces.find((item) => item.code === province)
-  if (!selectedProvince) {
-    return null
-  }
-  if (city === undefined) {
-    return { region, province: selectedProvince.code }
-  }
-  const selectedCity = selectedProvince.cities.find((item) => item.code === city)
-  return selectedCity ? { region, province: selectedProvince.code, city: selectedCity.code } : null
+  const { region } = value as Record<string, unknown>
+  return typeof region === 'string' && regions.has(region) ? { region } : null
 }

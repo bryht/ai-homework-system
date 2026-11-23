@@ -17,7 +17,7 @@ pub struct UploadedFile {
 
 /// Reads the `file` field of a multipart upload (other fields such as `purpose` are ignored).
 pub async fn read_file_field(mut multipart: Multipart) -> AppResult<UploadedFile> {
-    let invalid = || AppError::bad_request("Invalid upload", "上传格式错误");
+    let invalid = || AppError::bad_request("Invalid upload");
     while let Some(field) = multipart.next_field().await.map_err(|_| invalid())? {
         if field.name() != Some("file") {
             continue;
@@ -27,7 +27,7 @@ pub async fn read_file_field(mut multipart: Multipart) -> AppResult<UploadedFile
         let data = field.bytes().await.map_err(|_| invalid())?.to_vec();
         return Ok(UploadedFile { filename, mime_type, data });
     }
-    Err(AppError::bad_request("No file received", "没有收到文件"))
+    Err(AppError::bad_request("No file received"))
 }
 
 /// Stores the original file (deduplicated by SHA-256) and records it in `files`.
@@ -43,7 +43,6 @@ pub async fn save_upload(
             StatusCode::PAYLOAD_TOO_LARGE,
             "invalid_request_error",
             format!("Files must be smaller than {} MB", MAX_UPLOAD_BYTES / 1024 / 1024),
-            format!("文件不能超过 {} MB", MAX_UPLOAD_BYTES / 1024 / 1024),
         ));
     }
     let sha256 = hex::encode(Sha256::digest(&file.data));

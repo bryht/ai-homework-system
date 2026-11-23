@@ -1,6 +1,5 @@
 import { translate, type TranslationMessage } from '../../i18n/index.js'
 import { getGatewayHeaders, type GatewayMeta } from '../../platform/homeworkScope.js'
-import { useSettings } from '../settings.js'
 import { resizeUploadImage } from '../../utils/resizeUploadImage.js'
 import { readMessageEvent } from './parseEvent.js'
 import { readServerSentEvents } from './sse.js'
@@ -95,7 +94,6 @@ const anthropicHeaders = (
   meta?: GatewayMeta
 ): Record<string, string> => ({
   ...getGatewayHeaders(meta),
-  'Accept-Language': useSettings.getState().locale,
   // Files API 和通过 file_id 引用图片时必传；纯文本聊天无需携带。
   ...(beta ? { 'anthropic-beta': FILES_BETA } : {}),
 })

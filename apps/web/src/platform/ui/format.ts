@@ -1,12 +1,12 @@
 import type { HomeworkPhase } from '@hw/shared'
-import { useSettings } from '../../services/settings.js'
+import { LOCALE } from '../../services/settings.js'
 import type { Pt } from '../i18n.js'
 
 export const formatDateTime = (iso: string | null | undefined) => {
   if (!iso) {
     return '—'
   }
-  return new Intl.DateTimeFormat(useSettings.getState().locale, {
+  return new Intl.DateTimeFormat(LOCALE, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -15,7 +15,7 @@ export const formatDateTime = (iso: string | null | undefined) => {
 }
 
 export const formatNumber = (n: number) =>
-  new Intl.NumberFormat(useSettings.getState().locale).format(n)
+  new Intl.NumberFormat(LOCALE).format(n)
 
 /** 「还剩 3 天」/「2 小时后开始」 */
 export const describeRemaining = (
