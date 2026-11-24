@@ -62,23 +62,6 @@
   line-height: 1.5;
 }
 
-.locale {
-  align-self: center;
-  padding: 4px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: none;
-  color: var(--dsw-alias-label-tertiary);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-
-  &:hover {
-    color: var(--dsw-alias-label-primary);
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-}
-
 @media not all and (min-width: 480px) {
   .card {
     padding: 28px 20px 20px;

@@ -35,7 +35,7 @@ async fn download(
     Path(id): Path<String>,
     Query(query): Query<HashMap<String, String>>,
 ) -> AppResult<impl IntoResponse> {
-    let not_found = || AppError::not_found("File not found", "文件不存在");
+    let not_found = || AppError::not_found("File not found");
     let row = load_files(&state.db, std::slice::from_ref(&id)).await?.pop().ok_or_else(not_found)?;
     if row.owner_id != user.id {
         let homework_id = row.homework_id.as_deref().filter(|_| user.role == Role::Teacher).ok_or_else(not_found)?;

@@ -17,10 +17,9 @@ import {
 } from '../../services/chat/backup.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
-import { regionCodes, getRegionName, provinces } from '../../services/location.js'
+import { regionCodes, getRegionName } from '../../services/location.js'
 import {
-  isChineseBrowser,
-  setLocale,
+  LOCALE,
   setLocation,
   setThemePreference,
   setTtsVoice,
@@ -98,7 +97,6 @@ const SettingsContent = () => {
           {section === 'general' ? (
             <>
               <ThemeSetting />
-              <LocaleSetting />
               {platformFlags.voice ? <TtsVoiceSetting /> : null}
               <LocationSetting />
             </>
@@ -210,12 +208,7 @@ const useHistoryDelete = () => {
 
 const LocationSetting = () => {
   const t = useTranslate()
-  const locale = useSettings((state) => state.locale)
   const location = useSettings((state) => state.location)
-  const province =
-    location?.region === 'CN'
-      ? provinces.find((item) => item.code === location.province)
-      : undefined
 
   return (
     <SettingCell
@@ -224,71 +217,17 @@ const LocationSetting = () => {
       className={styles.locationCell}
       action={
         <div className={styles.locationSelectors}>
-          {isChineseBrowser() ? (
-            <>
-              <Select
-                ariaLabel={t('settingsLocationProvince')}
-                className={styles.provinceSelect}
-                value={province?.code ?? ''}
-                placeholder={t('settingsLocationProvince')}
-                options={provinces.map((item) => ({ value: item.code, label: item.name }))}
-                onChange={(value) => {
-                  if (value !== province?.code) {
-                    setLocation({ region: 'CN', province: value })
-                  }
-                }}
-              />
-              <Select
-                ariaLabel={t('settingsLocationCity')}
-                className={styles.citySelect}
-                value={province ? (location?.city ?? '') : ''}
-                disabled={!province?.cities.length}
-                placeholder={t('settingsLocationCity')}
-                options={
-                  province?.cities.map((item) => ({ value: item.code, label: item.name })) ?? []
-                }
-                onChange={(value) => {
-                  if (province) {
-                    setLocation({ region: 'CN', province: province.code, city: value })
-                  }
-                }}
-              />
-            </>
-          ) : (
-            <Select
-              ariaLabel={t('settingsLocationRegion')}
-              className={styles.regionSelect}
-              value={location?.region ?? ''}
-              placeholder={t('settingsLocationRegion')}
-              options={regionCodes
-                .map((code) => ({ value: code, label: getRegionName(code, locale) }))
-                .sort((a, b) => a.label.localeCompare(b.label, locale))}
-              onChange={(value) => setLocation({ region: value })}
-            />
-          )}
+          <Select
+            ariaLabel={t('settingsLocationRegion')}
+            className={styles.regionSelect}
+            value={location?.region ?? ''}
+            placeholder={t('settingsLocationRegion')}
+            options={regionCodes
+              .map((code) => ({ value: code, label: getRegionName(code) }))
+              .sort((a, b) => a.label.localeCompare(b.label, LOCALE))}
+            onChange={(value) => setLocation({ region: value })}
+          />
         </div>
-      }
-    />
-  )
-}
-
-const LocaleSetting = () => {
-  const t = useTranslate()
-  const locale = useSettings((state) => state.locale)
-  return (
-    <SettingCell
-      label={t('settingsLocalePreference')}
-      status={null}
-      action={
-        <Select
-          ariaLabel={t('settingsLocalePreference')}
-          value={locale}
-          options={[
-            { value: 'zh-CN', label: t('settingsLocaleZhCN'), lang: 'zh-CN' },
-            { value: 'en-US', label: t('settingsLocaleEnUS'), lang: 'en' },
-          ]}
-          onChange={setLocale}
-        />
       }
     />
   )

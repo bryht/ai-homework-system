@@ -26,7 +26,7 @@ const parseRoster = (text: string) =>
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [name = '', username] = line.split(/\s*[,，\t]\s*/)
+      const [name = '', username] = line.split(/\s*[,\t]\s*/)
       return username ? { name, username } : { name }
     })
 

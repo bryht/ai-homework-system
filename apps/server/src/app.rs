@@ -2,7 +2,7 @@ use crate::{
     auth::{LoginLimiter, MaybeUser},
     clock::Clock,
     config::Config,
-    error::{AppError, AppResult, localize_errors},
+    error::{AppError, AppResult},
     gateway::{self, providers::ProviderRegistry},
     routes,
     storage::Storage,
@@ -65,10 +65,7 @@ impl<T: DeserializeOwned, S: Send + Sync> FromRequest<S> for JsonBody<T> {
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         match Json::<T>::from_request(req, state).await {
             Ok(Json(value)) => Ok(Self(value)),
-            Err(rejection) => Err(AppError::bad_request(
-                format!("Invalid request: {}", rejection.body_text()),
-                format!("请求参数错误：{}", rejection.body_text()),
-            )),
+            Err(rejection) => Err(AppError::bad_request(format!("Invalid request: {}", rejection.body_text()))),
         }
     }
 }
@@ -90,7 +87,7 @@ async fn same_origin_writes(State(state): State<AppState>, request: Request, nex
             .map(|(_, rest)| rest.split('/').next().unwrap_or(rest));
         let allowed = origin.to_str().is_ok_and(|o| state.config.cors_origins.iter().any(|a| a == o));
         if !allowed && (host.is_none() || origin_host != host) {
-            return AppError::forbidden("Cross-site request rejected", "跨站请求被拒绝").into_response();
+            return AppError::forbidden("Cross-site request rejected").into_response();
         }
     }
     next.run(request).await
@@ -102,11 +99,11 @@ async fn models(State(state): State<AppState>, MaybeUser(user): MaybeUser) -> Ap
 }
 
 async fn api_not_found() -> AppError {
-    AppError::not_found("Not found", "接口不存在")
+    AppError::not_found("Not found")
 }
 
 async fn voice_disabled() -> AppError {
-    AppError::forbidden("Voice features are not available", "语音功能暂未开放")
+    AppError::forbidden("Voice features are not available")
 }
 
 pub fn build_router(state: AppState) -> Router {
@@ -136,7 +133,6 @@ pub fn build_router(state: AppState) -> Router {
     router
         .layer(DefaultBodyLimit::max(32 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_writes))
-        .layer(middleware::from_fn(localize_errors))
         .layer(cors)
         .with_state(state)
 }

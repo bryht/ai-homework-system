@@ -1,5 +1,3 @@
-import type { zh } from './zh.js'
-
 export const en = {
   welcomeMessageChat250808: 'How can I help you?',
   contentCaveat: 'AI-generated, for reference only',
@@ -89,13 +87,10 @@ export const en = {
   backupIncomplete: 'The file is incomplete and cannot be imported.',
   backupInvalidBranches: 'The message branches in this file are corrupted and cannot be imported.',
   backupInvalidFiles: 'The attachment data in this file is corrupted and cannot be imported.',
-  settingsLocalePreference: 'Language',
   settingsTtsVoice: 'Read-aloud voice',
   settingsTtsVoiceStella: 'Stella (female)',
   settingsTtsVoiceTide: 'Tide (male)',
   settingsLocation: 'Location',
-  settingsLocationProvince: 'Select province/region',
-  settingsLocationCity: 'Select city',
   settingsLocationRegion: 'Select country or region',
   settingDialogAsideGeneralOptionLabel: 'General',
   settingDialogAsideDataOptionLabel: 'Data',
@@ -176,6 +171,4 @@ export const en = {
   ttsFailed: 'Failed to read aloud. Please try again later.',
   retry: 'Retry',
   latestReminderLanguage: 'English',
-  settingsLocaleZhCN: 'Simplified Chinese',
-  settingsLocaleEnUS: 'English',
-} satisfies Record<keyof typeof zh, string>
+}

@@ -17,15 +17,13 @@ async fn logs_in_reports_user_and_logs_out(db: PgPool) {
 }
 
 #[sqlx::test]
-async fn rejects_wrong_password_with_localized_message(db: PgPool) {
+async fn rejects_wrong_password(db: PgPool) {
     let ctx = Ctx::new(db);
     ctx.create_teacher("teacher").await;
     let body = json!({ "username": "teacher", "password": "nope" });
-    let en = ctx.call(Method::POST, "/api/auth/login", None, Some(body.clone()), &[]).await;
-    assert_eq!(en.status, StatusCode::UNAUTHORIZED);
-    assert_eq!(en.json()["error"]["message"], "Wrong username or password");
-    let zh = ctx.call(Method::POST, "/api/auth/login", None, Some(body), &[("accept-language", "zh-CN")]).await;
-    assert_eq!(zh.json()["error"]["message"], "用户名或密码错误");
+    let res = ctx.call(Method::POST, "/api/auth/login", None, Some(body), &[]).await;
+    assert_eq!(res.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(res.json()["error"]["message"], "Wrong username or password");
 }
 
 #[sqlx::test]
@@ -73,14 +71,14 @@ async fn changes_password(db: PgPool) {
 async fn creates_student_accounts_with_one_time_passwords(db: PgPool) {
     let ctx = Ctx::new(db);
     let s = ctx.setup_class(ai_config()).await;
-    assert_eq!(s.students[0]["username"], "zhangsan");
+    assert_eq!(s.students[0]["username"], "samlee");
     assert_eq!(s.students[1]["username"], "alice.wang");
     assert_eq!(s.students[0]["password"].as_str().unwrap().len(), 10);
 
     let list = ctx.get(&format!("/api/classes/{}/students", s.class_id), &s.teacher).await.json();
     let names: Vec<&str> =
         list["students"].as_array().unwrap().iter().map(|x| x["username"].as_str().unwrap()).collect();
-    assert_eq!(names, ["zhangsan", "alice.wang"]);
+    assert_eq!(names, ["samlee", "alice.wang"]);
 
     let student_id = s.students[0]["id"].as_str().unwrap();
     let reset = ctx
@@ -95,7 +93,7 @@ async fn creates_student_accounts_with_one_time_passwords(db: PgPool) {
         .json();
     // Old sessions stop working after a reset.
     assert_eq!(ctx.get("/api/homeworks", &s.student1).await.status, StatusCode::UNAUTHORIZED);
-    ctx.login("zhangsan", reset["credential"]["password"].as_str().unwrap()).await;
+    ctx.login("samlee", reset["credential"]["password"].as_str().unwrap()).await;
 }
 
 #[sqlx::test]
@@ -114,7 +112,7 @@ async fn students_see_a_safe_view_without_the_teaching_prompt(db: PgPool) {
     assert_eq!(hw["phase"], "open");
     assert!(hw.get("aiConfig").is_none());
     assert_eq!(hw["ai"], json!({ "allowWebSearch": false, "allowFileUpload": true, "allowThinking": true }));
-    assert!(!res.text().contains("引导"));
+    assert!(!res.text().contains("patient learning guide"));
 }
 
 #[sqlx::test]
@@ -149,12 +147,15 @@ async fn accepts_submissions_in_window_and_rejects_after_due(db: PgPool) {
     let ctx = Ctx::new(db);
     let s = ctx.setup_class(ai_config()).await;
     let path = format!("/api/homeworks/{}/submission", s.homework_id);
-    let ok = ctx.put(&path, &s.student1, json!({ "content": "我的答案：x = 2" })).await;
+    let ok = ctx.put(&path, &s.student1, json!({ "content": "My answer: x = 2" })).await;
     assert_eq!(ok.status, StatusCode::OK);
-    assert_eq!(ok.json()["submission"]["content"], "我的答案：x = 2");
+    assert_eq!(ok.json()["submission"]["content"], "My answer: x = 2");
     assert_eq!(ok.json()["submission"]["isLate"], false);
     ctx.advance(20);
-    assert_eq!(ctx.put(&path, &s.student1, json!({ "content": "改一下" })).await.status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        ctx.put(&path, &s.student1, json!({ "content": "Changed my mind" })).await.status,
+        StatusCode::FORBIDDEN
+    );
 }
 
 #[sqlx::test]
@@ -177,7 +178,7 @@ async fn attaches_files_and_lets_the_teacher_download_them(db: PgPool) {
         .upload(
             &format!("/api/homeworks/{}/submission/files", s.homework_id),
             &s.student1,
-            "作业.txt",
+            "homework notes.txt",
             "text/plain",
             b"hello",
             &[],
@@ -194,7 +195,7 @@ async fn attaches_files_and_lets_the_teacher_download_them(db: PgPool) {
     ctx.put(&path, &s.student1, json!({ "content": "see attachment", "fileIds": [file_id] })).await;
     let student_id = s.students[0]["id"].as_str().unwrap();
     let record = ctx.get(&format!("/api/homeworks/{}/students/{student_id}", s.homework_id), &s.teacher).await.json();
-    assert_eq!(record["submission"]["files"][0]["filename"], "作业.txt");
+    assert_eq!(record["submission"]["files"][0]["filename"], "homework notes.txt");
 
     assert_eq!(ctx.get(&format!("/api/files/{file_id}"), &s.teacher).await.text(), "hello");
     assert_eq!(ctx.get(&format!("/api/files/{file_id}"), &s.student2).await.status, StatusCode::NOT_FOUND);
@@ -209,12 +210,12 @@ async fn stores_grades_and_exports_csv(db: PgPool) {
         .put(
             &format!("/api/homeworks/{}/students/{student_id}/grade", s.homework_id),
             &s.teacher,
-            json!({ "score": 92, "comment": "思路清晰, \"好\"" }),
+            json!({ "score": 92, "comment": "Clear reasoning, \"good\"" }),
         )
         .await;
     assert_eq!(res.json()["grade"]["score"], 92.0);
     let csv = ctx.get(&format!("/api/homeworks/{}/export.csv", s.homework_id), &s.teacher).await.text();
-    assert!(csv.contains("zhangsan,张三,0,0,0,,,92,\"思路清晰, \"\"好\"\"\""), "{csv}");
+    assert!(csv.contains("samlee,Sam Lee,0,0,0,,,92,\"Clear reasoning, \"\"good\"\"\""), "{csv}");
 }
 
 #[sqlx::test]

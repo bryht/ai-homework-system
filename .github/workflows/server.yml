@@ -1,0 +1,108 @@
+# Tests the server, builds it as a static Linux binary and deploys it to BANWAGONG.
+#
+# One-time setup (Settings → Secrets and variables → Actions → Secrets):
+#   BANWAGONG_KEY       private SSH key for root on the server. Best: the deploy-only key, whose
+#                       authorized_keys entry is locked to the deploy script (see deploy/banwagong/README.md)
+#   DEPLOY_HOST         server address
+#   DEPLOY_PORT         SSH port
+#   DEPLOY_KNOWN_HOSTS  the server's SSH host key line(s), as in known_hosts
+name: Build and deploy server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/server/**
+      - .github/workflows/server.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer push waits instead of cancelling a deploy halfway.
+concurrency:
+  group: server-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/hw-cargo-registry
+            ~/.cache/hw-cargo-target
+          key: server-musl-${{ hashFiles('apps/server/Cargo.lock') }}-${{ hashFiles('apps/server/src/**', 'apps/server/tests/**', 'apps/server/migrations/**') }}
+          restore-keys: |
+            server-musl-${{ hashFiles('apps/server/Cargo.lock') }}-
+            server-musl-
+
+      # Same toolchain as deploy/banwagong/update.ps1: Alpine (musl) gives a static binary that runs on
+      # the server's Ubuntu 20.04 regardless of its glibc. Tests run first; a failure stops the deploy.
+      - name: Test and build
+        run: |
+          mkdir -p ~/.cache/hw-cargo-registry ~/.cache/hw-cargo-target out
+          docker run --rm --network host \
+            -v "$PWD/apps/server:/src:ro" -v "$PWD/out:/out" \
+            -v "$HOME/.cache/hw-cargo-registry:/usr/local/cargo/registry" \
+            -v "$HOME/.cache/hw-cargo-target:/target" \
+            -e CARGO_TARGET_DIR=/target \
+            -e DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/postgres \
+            -w /src rust:1.97-alpine \
+            sh -c "apk add --no-cache musl-dev cmake make perl g++ linux-headers >/dev/null \
+              && cargo test --locked \
+              && cargo build --release --locked \
+              && cp /target/release/ai-homework /out/"
+          sudo chown -R "$(id -u):$(id -g)" ~/.cache/hw-cargo-registry ~/.cache/hw-cargo-target out
+          ls -la out/ai-homework
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-homework-linux-x86_64
+          path: out/ai-homework
+          retention-days: 14
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ai-homework-linux-x86_64
+
+      # Runs the deploy script on the server, which reads the binary from stdin, installs it, restarts
+      # the service and rolls back if the health check fails. With the deploy-only key the server runs
+      # that script whatever command is sent; with an unrestricted key the command below picks it.
+      - name: Deploy to BANWAGONG
+        env:
+          SSH_KEY: ${{ secrets.BANWAGONG_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          for name in SSH_KEY HOST PORT KNOWN_HOSTS; do
+            if [ -z "${!name}" ]; then
+              echo "::error::A deploy secret is missing ($name; see the top of .github/workflows/server.yml)"
+              exit 1
+            fi
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -p "$PORT" "root@$HOST" /usr/local/sbin/ai-homework-deploy < ai-homework
+
+      - name: Check through the gateway
+        run: curl -fsS --retry 5 --retry-delay 2 "${{ vars.API_ORIGIN }}/api/health"

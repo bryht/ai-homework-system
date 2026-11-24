@@ -58,9 +58,9 @@ async fn assert_can_chat(state: &AppState, access: &HomeworkAccess, user_id: &st
     let homework = &access.homework;
     match phase_at(homework.start_at, homework.due_at, state.clock.now()) {
         Phase::Upcoming => {
-            return Err(AppError::forbidden("This homework has not started yet", "作业还没有开始，暂时不能使用 AI"));
+            return Err(AppError::forbidden("This homework has not started yet"));
         }
-        Phase::Closed => return Err(AppError::forbidden("This homework is closed", "作业已截止，不能再使用 AI")),
+        Phase::Closed => return Err(AppError::forbidden("This homework is closed")),
         Phase::Open => {}
     }
     if let Some(budget) = homework.ai_config.0.token_budget
@@ -68,7 +68,6 @@ async fn assert_can_chat(state: &AppState, access: &HomeworkAccess, user_id: &st
     {
         return Err(AppError::forbidden(
             "You have used up the AI quota for this homework. Please contact your teacher.",
-            "本作业的 AI 使用额度已用完，请联系老师",
         ));
     }
     Ok(())
@@ -80,7 +79,6 @@ fn provider_for(state: &AppState, model: &str) -> AppResult<Arc<dyn Provider>> {
             StatusCode::SERVICE_UNAVAILABLE,
             "api_error",
             format!("The model \"{model}\" configured for this homework is unavailable. Please contact your teacher."),
-            format!("作业配置的模型「{model}」当前不可用，请联系老师"),
         )
     })
 }
@@ -294,22 +292,17 @@ async fn messages(
     let (Some(homework_id), Some(client_session_id)) =
         (header_value(&headers, HOMEWORK_HEADER), header_value(&headers, CONVERSATION_HEADER))
     else {
-        return Err(AppError::bad_request(
-            "Missing homework or conversation. Please reload the page.",
-            "缺少作业或会话信息，请刷新页面",
-        )
-        .into());
+        return Err(AppError::bad_request("Missing homework or conversation. Please reload the page.").into());
     };
     let access = load_homework_for(&state, &homework_id, &user).await?;
     assert_can_chat(&state, &access, &user.id).await?;
     let homework = &access.homework;
     let provider = provider_for(&state, &homework.ai_config.0.model)?;
 
-    let client: Value =
-        serde_json::from_slice(&body).map_err(|_| AppError::bad_request("Invalid JSON body", "请求格式错误"))?;
+    let client: Value = serde_json::from_slice(&body).map_err(|_| AppError::bad_request("Invalid JSON body"))?;
     let messages = client["messages"].as_array().cloned().unwrap_or_default();
     let Some(last_user) = last_user_index(&messages) else {
-        return Err(AppError::bad_request("Messages must not be empty", "消息不能为空").into());
+        return Err(AppError::bad_request("Messages must not be empty").into());
     };
 
     // Students can only reference files they uploaded to this homework.
@@ -399,7 +392,6 @@ async fn messages(
                 StatusCode::BAD_GATEWAY,
                 "api_error",
                 "The AI service is temporarily unavailable. Please try again.",
-                "AI 服务暂时不可用，请稍后重试",
             )
             .into());
         }
@@ -458,13 +450,12 @@ async fn upload_file(
     headers: HeaderMap,
     multipart: Multipart,
 ) -> Result<Response, GatewayError> {
-    let homework_id = header_value(&headers, HOMEWORK_HEADER).ok_or_else(|| {
-        AppError::bad_request("Missing homework. Please reload the page.", "缺少作业信息，请刷新页面")
-    })?;
+    let homework_id = header_value(&headers, HOMEWORK_HEADER)
+        .ok_or_else(|| AppError::bad_request("Missing homework. Please reload the page."))?;
     let access = load_homework_for(&state, &homework_id, &user).await?;
     assert_can_chat(&state, &access, &user.id).await?;
     if !access.homework.ai_config.0.allow_file_upload {
-        return Err(AppError::forbidden("File uploads are disabled for this homework", "本作业不允许上传文件").into());
+        return Err(AppError::forbidden("File uploads are disabled for this homework").into());
     }
     let provider = provider_for(&state, &access.homework.ai_config.0.model)?;
     let file = read_file_field(multipart).await?;

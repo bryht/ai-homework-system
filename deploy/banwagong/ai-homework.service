@@ -1,0 +1,25 @@
+# /etc/systemd/system/ai-homework.service on BANWAGONG.
+# Same layout as the other backends on that server (brushup, sticky-notes): a native binary in /opt/<app>,
+# run as www-data, settings in /opt/<app>/.env, reachable only through nginx (ufw blocks the port).
+[Unit]
+Description=AI Homework backend
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/ai-homework
+EnvironmentFile=/opt/ai-homework/.env
+ExecStart=/opt/ai-homework/ai-homework serve
+Restart=on-failure
+RestartSec=5
+# Only the uploads directory is writable.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/ai-homework/data
+
+[Install]
+WantedBy=multi-user.target

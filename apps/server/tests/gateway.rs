@@ -38,7 +38,7 @@ fn with(f: impl FnOnce(&mut AiConfig)) -> AiConfig {
 async fn streams_the_reply_and_records_the_turn(db: PgPool) {
     let ctx = Ctx::new(db.clone());
     let s = ctx.setup_class(ai_config()).await;
-    let res = ctx.chat(&s.student1, &s.homework_id, "一元二次方程怎么解？").await;
+    let res = ctx.chat(&s.student1, &s.homework_id, "How to solve x^2=4?").await;
     assert_eq!(res.status, StatusCode::OK);
     assert!(res.headers["content-type"].to_str().unwrap().contains("text/event-stream"));
     assert!(res.text().contains("event: message_stop"));
@@ -46,9 +46,9 @@ async fn streams_the_reply_and_records_the_turn(db: PgPool) {
     let turn = &turns(&db).await[0];
     assert_eq!((turn.status.as_str(), turn.kind.as_str(), turn.model.as_str()), ("ok", "new", "mock"));
     assert_eq!(turn.stop_reason.as_deref(), Some("end_turn"));
-    assert_eq!(turn.user_content.0, json!([{ "type": "text", "text": "一元二次方程怎么解？" }]));
+    assert_eq!(turn.user_content.0, json!([{ "type": "text", "text": "How to solve x^2=4?" }]));
     let text = turn.assistant_content.0.as_array().unwrap().iter().find(|b| b["type"] == "text").unwrap();
-    assert!(text["text"].as_str().unwrap().contains("模拟回复"));
+    assert!(text["text"].as_str().unwrap().contains("Mock reply"));
     assert!(turn.output_tokens > 0);
 
     let overview = ctx.get(&format!("/api/homeworks/{}/overview", s.homework_id), &s.teacher).await.json();
@@ -59,8 +59,8 @@ async fn streams_the_reply_and_records_the_turn(db: PgPool) {
     );
     let student_id = s.students[0]["id"].as_str().unwrap();
     let record = ctx.get(&format!("/api/homeworks/{}/students/{student_id}", s.homework_id), &s.teacher).await.json();
-    assert_eq!(record["conversations"][0]["title"], "一元二次方程怎么解？");
-    assert_eq!(record["conversations"][0]["turns"][0]["userContent"][0]["text"], "一元二次方程怎么解？");
+    assert_eq!(record["conversations"][0]["title"], "How to solve x^2=4?");
+    assert_eq!(record["conversations"][0]["turns"][0]["userContent"][0]["text"], "How to solve x^2=4?");
 }
 
 #[sqlx::test]
@@ -76,13 +76,32 @@ async fn enforces_the_teacher_configuration_upstream(db: PgPool) {
     let body = ctx.spy.calls.lock().unwrap()[0].clone();
     assert_eq!(body["model"], "mock");
     let system = body["system"].as_str().unwrap();
-    assert!(system.contains("不要直接给出作业的最终答案"));
-    assert!(system.contains("完成课本第 3 章习题 1-5"));
+    assert!(system.contains("Do not give the final answer"));
+    assert!(system.contains("Do exercises 1-5 in chapter 3"));
     assert!(!system.contains("DeepSeek"));
     assert!(body.get("tools").is_none());
     assert_eq!(body["thinking"], json!({ "type": "disabled" }));
     // chat-demo sends no max_tokens; the provider requires a positive one.
     assert_eq!(body["max_tokens"], json!(ai_homework::gateway::policy::MAX_OUTPUT_TOKENS));
+}
+
+#[sqlx::test]
+async fn turns_off_switches_the_model_cannot_honour(db: PgPool) {
+    let ctx = Ctx::new(db);
+    let s = ctx
+        .setup_class(with(|ai| {
+            ai.model = "text-only".into();
+            ai.allow_web_search = true;
+        }))
+        .await;
+    let path = format!("/api/homeworks/{}", s.homework_id);
+    let off = json!({ "allowWebSearch": false, "allowFileUpload": false, "allowThinking": false });
+    assert_eq!(ctx.get(&path, &s.student1).await.json()["homework"]["ai"], off);
+    let saved = ctx.get(&path, &s.teacher).await.json()["homework"]["aiConfig"].clone();
+    assert_eq!(saved["model"], "text-only");
+    for switch in ["allowWebSearch", "allowFileUpload", "allowThinking"] {
+        assert_eq!(saved[switch], false, "{switch}");
+    }
 }
 
 #[sqlx::test]
@@ -144,7 +163,7 @@ async fn rejects_students_from_other_classes(db: PgPool) {
 async fn infers_regenerate_edit_and_continue(db: PgPool) {
     let ctx = Ctx::new(db.clone());
     let s = ctx.setup_class(ai_config()).await;
-    let ask = json!([{ "role": "user", "content": "这道题怎么做？" }]);
+    let ask = json!([{ "role": "user", "content": "How do I start?" }]);
     ctx.chat_with(&s.student1, &s.homework_id, "u1", None, ask.clone()).await;
     ctx.chat_with(&s.student1, &s.homework_id, "u1", None, ask.clone()).await;
     ctx.chat_with(&s.student1, &s.homework_id, "u1-edited", None, ask.clone()).await;
@@ -153,7 +172,7 @@ async fn infers_regenerate_edit_and_continue(db: PgPool) {
         &s.homework_id,
         "u1",
         None,
-        json!([{ "role": "user", "content": "这道题怎么做？" }, { "role": "assistant", "content": [{ "type": "text", "text": "先" }] }]),
+        json!([{ "role": "user", "content": "How do I start?" }, { "role": "assistant", "content": [{ "type": "text", "text": "First" }] }]),
     )
     .await;
     ctx.chat_with(&s.student1, &s.homework_id, "u2", Some("a1"), ask).await;
@@ -193,7 +212,7 @@ async fn maps_uploaded_files_to_provider_ids(db: PgPool) {
 
     let messages = json!([{ "role": "user", "content": [
         { "type": "document", "source": { "type": "file", "file_id": file_id } },
-        { "type": "text", "text": "帮我看看" }
+        { "type": "text", "text": "Take a look" }
     ] }]);
     ctx.chat_with(&s.student1, &s.homework_id, "u1", None, messages.clone()).await;
     let sent = ctx.spy.calls.lock().unwrap()[0].clone();

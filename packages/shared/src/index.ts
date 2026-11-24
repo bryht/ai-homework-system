@@ -1,6 +1,6 @@
 /**
- * 前后端共享的业务类型与常量。
- * 只放类型和纯数据，不引入运行时依赖，前端（rspack）和后端（tsx）都直接编译源码。
+ * Business types and constants shared by the server and the web app.
+ * Types and plain data only, with no runtime dependencies; consumers compile the source directly.
  */
 
 export type Role = 'teacher' | 'student'
@@ -12,26 +12,26 @@ export type User = {
   username: string
 }
 
-/** 教学模式：决定默认的系统提示词模板，老师可以在模板基础上修改 */
+/** Teaching mode: picks the default teaching prompt template, which teachers can edit */
 export type TeachingMode = 'socratic' | 'explain' | 'open' | 'custom'
 
-/** 每个作业单独配置的 AI 行为，由后端网关强制执行 */
+/** Per-homework AI settings, enforced by the server gateway */
 export type AiConfig = {
-  /** 模型 ID，取值见 GET /api/models */
+  /** Model ID, one of GET /api/models */
   model: string
   teachingMode: TeachingMode
-  /** 老师的教学提示词，网关会放在系统提示词最前面，学生无法覆盖 */
+  /** The teacher's teaching prompt; the gateway puts it first in the system prompt and students cannot override it */
   systemPrompt: string
   allowWebSearch: boolean
   allowFileUpload: boolean
   allowThinking: boolean
-  /** 每个学生在本作业中可用的 Token 总量（输入 + 输出）；null 表示不限 */
+  /** Tokens (input + output) each student may use on this homework; null means unlimited */
   tokenBudget: number | null
 }
 
 export type HomeworkStatus = 'draft' | 'published'
 
-/** 根据当前时间计算：未开始 / 进行中 / 已截止 */
+/** From the current time: upcoming / open / closed */
 export type HomeworkPhase = 'upcoming' | 'open' | 'closed'
 
 export type Homework = {
@@ -51,7 +51,7 @@ export type Homework = {
   phase: HomeworkPhase
 }
 
-/** 学生看到的作业：不包含老师的教学提示词 */
+/** The homework as a student sees it: without the teacher's teaching prompt */
 export type StudentHomework = Omit<Homework, 'aiConfig'> & {
   ai: Pick<AiConfig, 'allowWebSearch' | 'allowFileUpload' | 'allowThinking'>
   usage: { tokens: number; tokenBudget: number | null }
@@ -71,7 +71,7 @@ export type ClassStudent = {
   username: string
 }
 
-/** 批量添加学生后一次性返回的初始密码，服务端不保存明文；已有账号加入班级时 password 为 null */
+/** Initial passwords returned once after adding students; the server keeps no plain text. password is null for existing accounts added to the class */
 export type CreatedCredential = {
   id: string
   name: string
@@ -102,7 +102,7 @@ export type Grade = {
   gradedAt: string | null
 }
 
-/** 老师端作业总览里每个学生的一行 */
+/** One row per student in the teacher's homework overview */
 export type StudentProgress = {
   student: ClassStudent
   conversations: number
@@ -120,19 +120,19 @@ export type HomeworkOverview = {
   students: StudentProgress[]
 }
 
-/** 网关推断的本轮类型 */
+/** The kind of turn, as inferred by the gateway */
 export type TurnKind = 'new' | 'edit' | 'regenerate' | 'continue'
 
 export type TurnStatus = 'streaming' | 'ok' | 'aborted' | 'error'
 
-/** Anthropic 格式的内容块，原样存储；前端按 type 渲染 */
+/** Content blocks in Anthropic format, stored as-is; the web app renders them by type */
 export type ContentBlock = { type: string; [key: string]: unknown }
 
 export type Turn = {
   id: string
   kind: TurnKind
   status: TurnStatus
-  /** chat-demo 本地消息 ID，用于还原分支 */
+  /** chat-demo local message ID, used to rebuild branches */
   userMessageId: string | null
   parentMessageId: string | null
   assistantMessageId: string | null
@@ -172,7 +172,7 @@ export type ModelOption = {
   supportsFiles: boolean
 }
 
-/** API 错误响应体，与 Anthropic 错误格式一致，chat-demo 可以直接展示 message */
+/** API error body in Anthropic error format, so chat-demo can show message as-is */
 export type ApiErrorBody = {
   error: { type: string; message: string }
 }
@@ -210,7 +210,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   tokenBudget: 500_000,
 }
 
-/** chat-demo 发给网关的自定义请求头 */
+/** Custom headers chat-demo sends to the gateway */
 export const GATEWAY_HEADERS = {
   homeworkId: 'x-hw-homework-id',
   conversationId: 'x-hw-conversation-id',

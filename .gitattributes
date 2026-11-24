@@ -1,0 +1,9 @@
+# sqlx stores a checksum of each migration; a CRLF checkout (Git on Windows) would build a binary
+# whose checksum no longer matches a database migrated from an LF build, and the server refuses to start.
+apps/server/migrations/*.sql text eol=lf
+
+# Files that run on Linux.
+*.sh text eol=lf
+deploy/banwagong/ai-homework-deploy text eol=lf
+deploy/banwagong/*.service text eol=lf
+deploy/banwagong/*.conf text eol=lf

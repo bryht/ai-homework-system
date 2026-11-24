@@ -56,7 +56,8 @@ mod tests {
     #[test]
     fn parses_events_split_across_chunks() {
         let mut parser = SseParser::default();
-        let text = "event: a\ndata: {\"x\":\"中文\"}\r\n\r\n: keepalive\n\nevent: b\ndata: 1\ndata: 2\n\n";
+        // Multi-byte UTF-8 (2- and 3-byte characters) split across chunks.
+        let text = "event: a\ndata: {\"x\":\"café ✓\"}\r\n\r\n: keepalive\n\nevent: b\ndata: 1\ndata: 2\n\n";
         let bytes = text.as_bytes();
         let mut events = Vec::new();
         for chunk in bytes.chunks(3) {
@@ -65,7 +66,7 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                SseEvent { event: "a".into(), data: "{\"x\":\"中文\"}".into() },
+                SseEvent { event: "a".into(), data: "{\"x\":\"café ✓\"}".into() },
                 SseEvent { event: "b".into(), data: "1\n2".into() },
             ]
         );

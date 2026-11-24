@@ -73,7 +73,7 @@ async fn own_class(state: &AppState, teacher: &User, class_id: &str) -> AppResul
     .bind(&teacher.id)
     .fetch_optional(&state.db)
     .await?
-    .ok_or_else(|| AppError::not_found("Class not found", "班级不存在"))
+    .ok_or_else(|| AppError::not_found("Class not found"))
 }
 
 #[derive(sqlx::FromRow, serde::Serialize)]
@@ -106,7 +106,7 @@ struct ClassBody {
 fn class_name(body: &ClassBody) -> AppResult<String> {
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 100 {
-        return Err(AppError::bad_request("Class name must be 1-100 characters", "班级名称需要 1–100 个字"));
+        return Err(AppError::bad_request("Class name must be 1-100 characters"));
     }
     Ok(name.to_string())
 }
@@ -196,22 +196,21 @@ async fn add_students(
     let teacher = user.require(Role::Teacher)?;
     let class = own_class(&state, &teacher, &class_id).await?;
     if body.students.is_empty() || body.students.len() > 200 {
-        return Err(AppError::bad_request("Add between 1 and 200 students at a time", "一次添加 1–200 名学生"));
+        return Err(AppError::bad_request("Add between 1 and 200 students at a time"));
     }
     let mut created = Vec::new();
     let mut taken = HashSet::new();
     for entry in body.students {
         let name = entry.name.trim().to_string();
         if name.is_empty() || name.chars().count() > 100 {
-            return Err(AppError::bad_request("Each student needs a name", "每个学生都需要姓名"));
+            return Err(AppError::bad_request("Each student needs a name"));
         }
         let requested = entry.username.map(|u| u.trim().to_lowercase()).filter(|u| !u.is_empty());
         if let Some(username) = &requested {
             if !valid_username(username) {
-                return Err(AppError::bad_request(
-                    format!("Username \"{username}\" may only contain a-z, 0-9, \".\", \"_\" and \"-\" (2-32 chars)"),
-                    format!("用户名「{username}」只能包含小写字母、数字、点、下划线和连字符（2–32 位）"),
-                ));
+                return Err(AppError::bad_request(format!(
+                    "Username \"{username}\" may only contain a-z, 0-9, \".\", \"_\" and \"-\" (2-32 chars)"
+                )));
             }
             let existing = sqlx::query_as::<_, UserRow>(
                 "SELECT id, role, name, username, password_hash FROM users WHERE username = $1",
@@ -221,10 +220,7 @@ async fn add_students(
             .await?;
             if let Some(existing) = existing {
                 if existing.role != "student" {
-                    return Err(AppError::bad_request(
-                        format!("Username \"{username}\" is taken"),
-                        format!("用户名「{username}」已被占用"),
-                    ));
+                    return Err(AppError::bad_request(format!("Username \"{username}\" is taken")));
                 }
                 add_member(&state, &class.id, &existing.id).await?;
                 taken.insert(existing.username.clone());
@@ -272,7 +268,7 @@ async fn reset_password(
     .bind(&student_id)
     .fetch_optional(&state.db)
     .await?
-    .ok_or_else(|| AppError::not_found("Student is not in this class", "学生不在这个班级"))?;
+    .ok_or_else(|| AppError::not_found("Student is not in this class"))?;
     let password = new_password();
     sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
         .bind(hash_password(&password).await?)

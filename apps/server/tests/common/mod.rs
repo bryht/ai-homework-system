@@ -35,7 +35,17 @@ impl Provider for Spy {
         "mock"
     }
     fn models(&self) -> Vec<ModelOption> {
-        self.inner.models()
+        let mut models = self.inner.models();
+        // A model with no extras, like most Ollama models without files or web search.
+        models.push(ModelOption {
+            id: "text-only".into(),
+            label: "Text only".into(),
+            provider: "mock".into(),
+            supports_thinking: false,
+            supports_web_search: false,
+            supports_files: false,
+        });
+        models
     }
     async fn create_message(&self, body: Value, has_files: bool) -> anyhow::Result<Upstream> {
         self.calls.lock().unwrap().push(body.clone());
@@ -89,7 +99,9 @@ pub fn ai_config() -> AiConfig {
     AiConfig {
         model: "mock".into(),
         teaching_mode: TeachingMode::Socratic,
-        system_prompt: "你是一名耐心的学习引导者。\n- 不要直接给出作业的最终答案、完整代码或完整文章。".into(),
+        system_prompt:
+            "You are a patient learning guide.\n- Do not give the final answer, complete code or a complete essay."
+                .into(),
         allow_web_search: false,
         allow_file_upload: true,
         allow_thinking: true,
@@ -222,13 +234,13 @@ impl Ctx {
     /// Teacher + class + two students + a published homework that is open for 14 days.
     pub async fn setup_class(&self, ai: AiConfig) -> Setup {
         let teacher = self.create_teacher("teacher").await;
-        let class = self.post("/api/classes", &teacher, json!({ "name": "七年级一班" })).await.json();
+        let class = self.post("/api/classes", &teacher, json!({ "name": "Grade 7, Class 1" })).await.json();
         let class_id = class["class"]["id"].as_str().unwrap().to_string();
         let created = self
             .post(
                 &format!("/api/classes/{class_id}/students"),
                 &teacher,
-                json!({ "students": [{ "name": "张三", "username": "zhangsan" }, { "name": "Alice Wang" }] }),
+                json!({ "students": [{ "name": "Sam Lee", "username": "samlee" }, { "name": "Alice Wang" }] }),
             )
             .await
             .json();
@@ -240,8 +252,8 @@ impl Ctx {
                 &teacher,
                 json!({
                     "classId": class_id,
-                    "title": "一元二次方程",
-                    "description": "完成课本第 3 章习题 1-5",
+                    "title": "Quadratic equations",
+                    "description": "Do exercises 1-5 in chapter 3",
                     "startAt": now - Duration::days(1),
                     "dueAt": now + Duration::days(14),
                     "status": "published",
@@ -281,7 +293,7 @@ impl Ctx {
         }
         let body = json!({
             "model": "deepseek-flash",
-            "system": "该助手为DeepSeek，由深度求索公司创造。",
+            "system": "You are DeepSeek, made by DeepSeek.",
             "messages": messages,
             "thinking": { "type": "enabled" },
             "tools": [
