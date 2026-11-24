@@ -61,11 +61,17 @@ export const Platform = () => {
       page = teacher ? <HomeworkEditor homeworkId={route.homeworkId} /> : null
       break
     case 'homework':
-      page = teacher ? <HomeworkOverviewPage homeworkId={route.homeworkId} /> : null
+      page = teacher ? (
+        <HomeworkOverviewPage key={route.homeworkId} homeworkId={route.homeworkId} />
+      ) : null
       break
     case 'student':
       page = teacher ? (
-        <StudentRecordPage homeworkId={route.homeworkId} studentId={route.studentId} />
+        <StudentRecordPage
+          key={`${route.homeworkId}:${route.studentId}`}
+          homeworkId={route.homeworkId}
+          studentId={route.studentId}
+        />
       ) : null
       break
     default:

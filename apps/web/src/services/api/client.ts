@@ -154,9 +154,11 @@ export async function* streamMessage(
   apiKey: string,
   body: CreateMessageRequest,
   signal: AbortSignal,
-  meta?: GatewayMeta
+  meta?: GatewayMeta,
+  requestId?: string
 ): AsyncGenerator<MessageStreamEvent> {
-  const response = await request(`${ANTHROPIC_BASE_URL}/messages`, {
+  const query = requestId ? `?request_id=${encodeURIComponent(requestId)}` : ''
+  const response = await request(`${ANTHROPIC_BASE_URL}/messages${query}`, {
     method: 'POST',
     headers: {
       ...anthropicHeaders(apiKey, hasFile(body), meta),
@@ -197,3 +199,10 @@ export async function* streamMessage(
   // 服务端没有提供错误内容时保持为空，不推测断流原因。
   throw new ApiError('interrupted', '')
 }
+
+export const reportMessageStop = (requestId: string) =>
+  fetch(`${ANTHROPIC_BASE_URL}/messages/stop?request_id=${encodeURIComponent(requestId)}`, {
+    method: 'POST',
+    headers: getGatewayHeaders(),
+    keepalive: true,
+  })

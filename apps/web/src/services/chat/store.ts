@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
-import { ApiError, streamMessage } from '../api/client.js'
+import { ApiError, reportMessageStop, streamMessage } from '../api/client.js'
 import type { ChatModel, CreateMessageRequest } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import {
@@ -545,7 +545,19 @@ const removeSessionData = async (id: string): Promise<boolean> => {
   }
 }
 
-export const stopReply = (sessionId: string) => getStreamController(sessionId)?.abort()
+const streamRequestIds = new WeakMap<AbortController, string>()
+
+export const stopReply = (sessionId: string) => {
+  const controller = getStreamController(sessionId)
+  if (!controller || controller.signal.aborted) {
+    return
+  }
+  const requestId = streamRequestIds.get(controller)
+  if (requestId) {
+    void reportMessageStop(requestId).catch(() => {})
+  }
+  controller.abort()
+}
 
 /**
  * 提交指定会话的最新草稿；null 表示新建会话。
@@ -1020,6 +1032,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           initial.thinking ?? false,
           latestReminder
         )
+        const requestId = createId()
+        streamRequestIds.set(controller, requestId)
         const events = streamMessage(
           useSettings.getState().apiKey ?? '',
           {
@@ -1037,7 +1051,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             userMessageId: prepared.question.id,
             parentMessageId: prepared.question.parentId ?? null,
             assistantMessageId: initial.id,
-          }
+          },
+          requestId
         )
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {

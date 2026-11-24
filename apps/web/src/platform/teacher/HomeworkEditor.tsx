@@ -9,6 +9,7 @@ import {
 } from '@hw/shared'
 import { useEffect, useState } from 'react'
 import { Button } from '../../components/base/Button.js'
+import { Modal } from '../../components/base/Modal.js'
 import { Select } from '../../components/base/Select.js'
 import { api } from '../api.js'
 import { usePt, type PlatformKey } from '../i18n.js'
@@ -94,6 +95,7 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
   const [form, setForm] = useState<Form | null>(null)
   const [pending, setPending] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   useEffect(() => {
     if (data && !form) {
@@ -147,6 +149,23 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
           })
       navigate({ name: 'homework', homeworkId: homework.id })
     } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPending(false)
+    }
+  }
+
+  const remove = async () => {
+    if (!homeworkId || pending) {
+      return
+    }
+    setPending(true)
+    setSaveError(null)
+    try {
+      await api(`/api/homeworks/${homeworkId}`, { method: 'DELETE' })
+      navigate({ name: 'home' })
+    } catch (e) {
+      setDeleteOpen(false)
       setSaveError(e instanceof Error ? e.message : String(e))
     } finally {
       setPending(false)
@@ -312,8 +331,31 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
           <Button variant="outlined" onClick={() => window.history.back()}>
             {pt('cancel')}
           </Button>
+          {homeworkId ? (
+            <Button variant="dangerOutlined" disabled={pending} onClick={() => setDeleteOpen(true)}>
+              {pt('deleteHomework')}
+            </Button>
+          ) : null}
         </div>
       </form>
+      {deleteOpen ? (
+        <Modal
+          title={pt('deleteHomework')}
+          onClose={() => !pending && setDeleteOpen(false)}
+          footer={
+            <>
+              <Button variant="outlined" disabled={pending} onClick={() => setDeleteOpen(false)}>
+                {pt('cancel')}
+              </Button>
+              <Button variant="danger" disabled={pending} onClick={() => void remove()}>
+                {pt('deleteHomework')}
+              </Button>
+            </>
+          }
+        >
+          {pt('confirmDeleteHomework', { title: data.homework?.title ?? form.title })}
+        </Modal>
+      ) : null}
     </>
   )
 }

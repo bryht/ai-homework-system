@@ -66,7 +66,11 @@ const TurnView = ({ turn }: { turn: Turn }) => {
       <div className={styles.meta}>
         <span>{formatDateTime(turn.createdAt)}</span>
         {turn.kind !== 'new' ? <Badge tone="upcoming">{pt(KIND_LABEL[turn.kind])}</Badge> : null}
-        {turn.status === 'aborted' ? <Badge tone="warn">{pt('statusAborted')}</Badge> : null}
+        {turn.status === 'aborted' ? (
+          <Badge tone="warn">
+            {pt(turn.stopReason === 'user_stop' ? 'statusStopped' : 'statusAborted')}
+          </Badge>
+        ) : null}
         {turn.status === 'streaming' ? <Badge tone="warn">{pt('statusStreaming')}</Badge> : null}
         <span className={styles.tokens}>
           {pt('tokensLabel', {

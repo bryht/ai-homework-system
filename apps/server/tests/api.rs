@@ -129,6 +129,55 @@ async fn hides_drafts_and_other_classes(db: PgPool) {
 }
 
 #[sqlx::test]
+async fn only_the_owner_can_delete_homework_and_its_records(db: PgPool) {
+    let ctx = Ctx::new(db.clone());
+    let s = ctx.setup_class(ai_config()).await;
+    let path = format!("/api/homeworks/{}", s.homework_id);
+    let other = ctx.create_teacher("teacher2").await;
+    assert_eq!(
+        ctx.call(Method::DELETE, &path, Some(&s.student1), None, &[]).await.status,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        ctx.call(Method::DELETE, &path, Some(&other), None, &[]).await.status,
+        StatusCode::NOT_FOUND
+    );
+    let upload = ctx
+        .upload(&format!("{path}/submission/files"), &s.student1, "notes.txt", "text/plain", b"notes", &[])
+        .await
+        .json();
+    let file_id = upload["file"]["id"].as_str().unwrap();
+    assert_eq!(
+        ctx.put(&format!("{path}/submission"), &s.student1, json!({ "fileIds": [file_id], "content": "Answer" }))
+            .await.status,
+        StatusCode::OK
+    );
+    assert_eq!(ctx.chat(&s.student1, &s.homework_id, "Question").await.status, StatusCode::OK);
+    let student_id = s.students[0]["id"].as_str().unwrap();
+    assert_eq!(
+        ctx.put(&format!("{path}/students/{student_id}/grade"), &s.teacher, json!({ "score": 85, "comment": "Good" }))
+            .await.status,
+        StatusCode::OK
+    );
+
+    assert_eq!(ctx.call(Method::DELETE, &path, Some(&s.teacher), None, &[]).await.status, StatusCode::OK);
+    assert_eq!(ctx.get(&path, &s.teacher).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(ctx.get(&format!("/api/files/{file_id}"), &s.student1).await.status, StatusCode::NOT_FOUND);
+    let has_records: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM conversations WHERE homework_id = $1 \
+         UNION ALL SELECT 1 FROM turns WHERE homework_id = $1 \
+         UNION ALL SELECT 1 FROM submissions WHERE homework_id = $1 \
+         UNION ALL SELECT 1 FROM evaluations WHERE homework_id = $1 \
+         UNION ALL SELECT 1 FROM files WHERE homework_id = $1)",
+    )
+    .bind(&s.homework_id)
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(!has_records);
+}
+
+#[sqlx::test]
 async fn validates_time_window_and_model(db: PgPool) {
     let ctx = Ctx::new(db);
     let s = ctx.setup_class(ai_config()).await;
