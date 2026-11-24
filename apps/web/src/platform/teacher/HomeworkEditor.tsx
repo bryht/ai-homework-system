@@ -115,6 +115,8 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
     setForm({ ...form, aiConfig: { ...form.aiConfig, [key]: value } })
 
   const model = data.models.find((m) => m.id === form.aiConfig.model)
+  const webSearchUnavailable = model?.supportsWebSearch === false
+  const allowWebSearch = form.aiConfig.allowWebSearch && !webSearchUnavailable
   const budget = form.tokenBudgetText.trim() === '' ? null : Number(form.tokenBudgetText)
   const budgetValid = budget === null || (Number.isInteger(budget) && budget > 0)
   const valid =
@@ -135,7 +137,7 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
       dueAt: fromLocalInput(form.dueAt),
       status: form.published ? 'published' : 'draft',
       allowLateSubmission: form.allowLateSubmission,
-      aiConfig: { ...form.aiConfig, tokenBudget: budget },
+      aiConfig: { ...form.aiConfig, allowWebSearch, tokenBudget: budget },
     }
     try {
       const { homework } = homeworkId
@@ -306,12 +308,17 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
                   label={pt('allowThinking')}
                   disabled={model ? !model.supportsThinking : false}
                 />
-                <Checkbox
-                  checked={form.aiConfig.allowWebSearch}
-                  onChange={(v) => setAi('allowWebSearch', v)}
-                  label={pt('allowWebSearch')}
-                  disabled={model ? !model.supportsWebSearch : false}
-                />
+                <div>
+                  <Checkbox
+                    checked={allowWebSearch}
+                    onChange={(v) => setAi('allowWebSearch', v)}
+                    label={pt('allowWebSearch')}
+                    disabled={webSearchUnavailable}
+                  />
+                  {webSearchUnavailable ? (
+                    <div className={ui.hint}>{pt('webSearchUnavailable')}</div>
+                  ) : null}
+                </div>
               </div>
             </div>
             <Field label={pt('tokenBudget')} hint={pt('tokenBudgetHint')}>

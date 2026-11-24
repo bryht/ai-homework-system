@@ -118,6 +118,7 @@ const en = {
   systemPromptHint:
     'Students never see this prompt. The gateway puts it, with the instructions, at the top of the system prompt, so students cannot override it.',
   allowWebSearch: 'Allow web search',
+  webSearchUnavailable: 'This model does not support web search.',
   allowFileUpload: 'Allow file uploads',
   allowThinking: 'Allow deep thinking',
   tokenBudget: 'Token quota per student',
