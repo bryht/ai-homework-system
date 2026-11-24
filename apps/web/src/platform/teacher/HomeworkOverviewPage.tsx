@@ -81,8 +81,16 @@ export const HomeworkOverviewPage = ({ homeworkId }: { homeworkId: string }) => 
         </span>
       </div>
       <div className={ui.stats}>
-        <Stat value={`${submitted} / ${total}`} label={pt('colSubmission')} />
-        <Stat value={`${active} / ${total}`} label={pt('usedAi')} />
+        <Stat
+          value={`${submitted} / ${total}`}
+          label={pt('colSubmission')}
+          progress={total ? submitted / total : 0}
+        />
+        <Stat
+          value={`${active} / ${total}`}
+          label={pt('usedAi')}
+          progress={total ? active / total : 0}
+        />
         <Stat value={formatNumber(turns)} label={pt('colTurns')} />
       </div>
       {total === 0 ? (

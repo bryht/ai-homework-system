@@ -8,6 +8,15 @@ use axum::http::StatusCode;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 
+/// Upper bound on one reply, thinking included. The provider rejects requests without
+/// `max_tokens` ("max_tokens is required and must be positive") and chat-demo never sends one.
+pub const MAX_OUTPUT_TOKENS: u64 = 32_768;
+
+/// The browser's `max_tokens` when it is positive, capped at [`MAX_OUTPUT_TOKENS`].
+fn max_tokens(client: &Value) -> u64 {
+    client["max_tokens"].as_u64().filter(|&n| n > 0).map_or(MAX_OUTPUT_TOKENS, |n| n.min(MAX_OUTPUT_TOKENS))
+}
+
 fn has_cjk(text: &str) -> bool {
     text.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c))
 }
@@ -130,6 +139,7 @@ pub fn build_upstream_request(
     body.insert("model".into(), json!(ai.model));
     body.insert("system".into(), json!(build_system_prompt(homework)));
     body.insert("messages".into(), Value::Array(rewritten));
+    body.insert("max_tokens".into(), json!(max_tokens(client)));
     let thinking = ai.allow_thinking && client.pointer("/thinking/type") == Some(&json!("enabled"));
     body.insert("thinking".into(), json!({ "type": if thinking { "enabled" } else { "disabled" } }));
     let tools = client["tools"].as_array().filter(|t| ai.allow_web_search && !t.is_empty()).cloned();
@@ -139,4 +149,20 @@ pub fn build_upstream_request(
     };
     body.remove("stream");
     Ok((Value::Object(body), has_files))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn caps_max_tokens() {
+        let sent = |v: Value| max_tokens(&json!({ "max_tokens": v }));
+        assert_eq!(sent(json!(1000)), 1000);
+        assert_eq!(sent(json!(10_000_000)), MAX_OUTPUT_TOKENS);
+        assert_eq!(sent(json!(0)), MAX_OUTPUT_TOKENS);
+        assert_eq!(sent(json!(-5)), MAX_OUTPUT_TOKENS);
+        assert_eq!(sent(json!("100")), MAX_OUTPUT_TOKENS);
+        assert_eq!(max_tokens(&json!({})), MAX_OUTPUT_TOKENS);
+    }
 }

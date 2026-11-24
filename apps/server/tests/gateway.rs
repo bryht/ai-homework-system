@@ -81,6 +81,8 @@ async fn enforces_the_teacher_configuration_upstream(db: PgPool) {
     assert!(!system.contains("DeepSeek"));
     assert!(body.get("tools").is_none());
     assert_eq!(body["thinking"], json!({ "type": "disabled" }));
+    // chat-demo sends no max_tokens; the provider requires a positive one.
+    assert_eq!(body["max_tokens"], json!(ai_homework::gateway::policy::MAX_OUTPUT_TOKENS));
 }
 
 #[sqlx::test]

@@ -48,7 +48,7 @@ const HomeworkCard = ({ homework: hw }: { homework: StudentHomework }) => {
   const pt = usePt()
   const budget = hw.usage.tokenBudget
   return (
-    <Card className={styles.homeworkCard}>
+    <Card className={`${styles.homeworkCard} ${styles[`phase-${hw.phase}`] ?? ''}`}>
       <div className={ui.row}>
         <PhaseBadge phase={hw.phase} />
         {hw.submission ? (
@@ -62,14 +62,14 @@ const HomeworkCard = ({ homework: hw }: { homework: StudentHomework }) => {
         <span className={ui.muted}>{hw.className}</span>
       </div>
       <h2 className={styles.cardTitle}>{hw.title}</h2>
-      <div className={ui.muted}>
+      <div className={styles.cardMeta}>
         <div>{pt('dueAt', { time: formatDateTime(hw.dueAt) })}</div>
         {hw.phase === 'upcoming' ? (
           <div>{pt('startsAt', { time: formatDateTime(hw.startAt) })}</div>
         ) : null}
       </div>
       <div className={styles.cardFooter}>
-        <span className={ui.muted}>
+        <span className={styles.remaining}>
           {hw.phase === 'closed'
             ? budget
               ? pt('tokensUsed', {

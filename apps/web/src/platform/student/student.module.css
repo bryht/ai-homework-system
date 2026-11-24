@@ -1,15 +1,50 @@
 .homeworkCard {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow: hidden;
+  transition:
+    transform var(--ds-transition-duration) var(--ds-ease-in-out),
+    box-shadow var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  /* Phase accent along the top edge */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background: var(--dsw-alias-border-l2);
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--hw-shadow-md);
+  }
+}
+
+.phase-open::before {
+  background: var(--hw-brand-gradient);
+}
+
+.phase-upcoming::before {
+  background: var(--dsw-static-blue-300);
 }
 
 .cardTitle {
   margin: 4px 0 0;
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 650;
   line-height: 1.4;
+  letter-spacing: -0.01em;
   overflow-wrap: anywhere;
+}
+
+.cardMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--dsw-alias-label-secondary);
 }
 
 .cardFooter {
@@ -17,7 +52,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 6px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--hw-border);
+}
+
+.remaining {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 聊天页顶部的作业栏，放在 chat-demo 主区域最上方 */
@@ -35,12 +78,16 @@
 
 .barBack {
   flex: none;
+  padding: 6px 10px;
+  margin-left: -4px;
+  border-radius: 8px;
   color: var(--dsw-alias-label-secondary);
   text-decoration: none;
   white-space: nowrap;
 
   &:hover {
     color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
@@ -77,6 +124,11 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+
+  > span:first-child {
+    color: var(--dsw-static-red-400);
+    font-size: 9px;
+  }
 }
 
 .barActions {

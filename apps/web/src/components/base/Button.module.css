@@ -55,6 +55,7 @@
 .primary {
   color: var(--dsw-alias-label-primary-foreground);
   background-color: var(--dsw-alias-button-primary-fill);
+  box-shadow: var(--hw-button-primary-shadow, none);
 
   &:hover:not(:disabled) {
     background-color: var(--dsw-alias-button-primary-hover);
@@ -63,12 +64,12 @@
 
 .outlined {
   color: var(--dsw-alias-label-primary);
-  background-color: transparent;
+  background-color: var(--hw-button-outlined-bg, transparent);
   border-color: var(--dsw-alias-border-l2);
   font-weight: 400;
 
   &:hover:not(:disabled) {
-    background-color: var(--dsw-alias-interactive-bg-hover);
+    background-color: var(--hw-button-outlined-hover, var(--dsw-alias-interactive-bg-hover));
   }
 }
 

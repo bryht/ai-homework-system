@@ -5,47 +5,68 @@
   place-items: center;
   padding: 16px;
   overflow-y: auto;
-  background: var(--dsw-alias-bg-base);
+  background:
+    radial-gradient(640px circle at 12% 18%, var(--hw-glow), transparent 62%),
+    radial-gradient(560px circle at 88% 82%, var(--hw-glow-2), transparent 62%), var(--hw-canvas);
 }
 
 .card {
+  --hw-button-primary-shadow:
+    0 1px 2px rgba(57, 100, 254, 0.25), 0 6px 16px rgba(57, 100, 254, 0.22);
+
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 16px;
   width: 100%;
-  max-width: 380px;
-  padding: 32px 28px 24px;
-  border-radius: 20px;
-  background: var(--dsw-alias-bg-base);
+  max-width: 400px;
+  padding: 36px 32px 24px;
+  border-radius: 24px;
+  background: var(--hw-surface);
   color: var(--dsw-alias-label-primary);
-  border: 1px solid var(--dsw-alias-border-l1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--hw-border);
+  box-shadow: var(--hw-shadow-md);
   font-size: 14px;
+
+  input {
+    height: 44px;
+  }
+
+  button[type='submit'] {
+    height: var(--ds-control-height-xl);
+    margin-top: 4px;
+    font-size: 15px;
+  }
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .title {
-  margin: 8px 0 0;
-  font-size: 22px;
-  font-weight: 600;
+  margin: 12px 0 0;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
   margin: -8px 0 4px;
   color: var(--dsw-alias-label-secondary);
+  line-height: 1.5;
 }
 
 .locale {
   align-self: center;
-  padding: 4px 8px;
+  padding: 4px 10px;
   border: 0;
+  border-radius: 8px;
   background: none;
   color: var(--dsw-alias-label-tertiary);
   font: inherit;
@@ -54,5 +75,13 @@
 
   &:hover {
     color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+@media not all and (min-width: 480px) {
+  .card {
+    padding: 28px 20px 20px;
+    border-radius: 20px;
   }
 }

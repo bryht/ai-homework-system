@@ -217,6 +217,39 @@ body[data-ds-dark-theme] {
   --dsw-specific-sidebar-nav-item-hover: var(--dsw-static-neutral-bluish-850);
 }
 
+/* Homework platform pages (outside the chat): tinted canvas, raised white surfaces */
+body {
+  --hw-canvas: rgb(244, 246, 251);
+  --hw-surface: var(--dsw-static-neutral-bluish-00);
+  --hw-surface-hover: rgb(248, 249, 252);
+  --hw-border: rgba(15, 23, 42, 0.08);
+  --hw-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --hw-shadow-md: 0 2px 6px rgba(16, 24, 40, 0.05), 0 12px 28px rgba(16, 24, 40, 0.08);
+  --hw-brand-gradient: linear-gradient(
+    135deg,
+    rgb(96, 140, 255) 0%,
+    rgb(57, 100, 254) 48%,
+    rgb(119, 84, 255) 100%
+  );
+  --hw-brand-soft: rgba(57, 100, 254, 0.08);
+  --hw-focus-ring: 0 0 0 3px rgba(57, 100, 254, 0.18);
+  --hw-glow: rgba(57, 100, 254, 0.1);
+  --hw-glow-2: rgba(119, 84, 255, 0.08);
+}
+
+body[data-ds-dark-theme] {
+  --hw-canvas: var(--dsw-static-neutral-bluish-1000);
+  --hw-surface: var(--dsw-static-neutral-bluish-900);
+  --hw-surface-hover: rgb(34, 35, 38);
+  --hw-border: rgba(255, 255, 255, 0.08);
+  --hw-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --hw-shadow-md: 0 2px 6px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.35);
+  --hw-brand-soft: rgba(86, 134, 254, 0.16);
+  --hw-focus-ring: 0 0 0 3px rgba(86, 134, 254, 0.3);
+  --hw-glow: rgba(86, 134, 254, 0.12);
+  --hw-glow-2: rgba(119, 84, 255, 0.1);
+}
+
 body {
   --dsw-shadow-lv3:
     0 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 4px 0 rgba(0, 0, 0, 0.02), 0 12px 32px 0 rgba(0, 0, 0, 0.08);
