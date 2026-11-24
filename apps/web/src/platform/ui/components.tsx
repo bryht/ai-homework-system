@@ -65,12 +65,22 @@ export const PageShell = ({ children }: { children: ReactNode }) => {
         </nav>
         {user ? (
           <div className={styles.userMenu}>
-            <Link to={{ name: 'account' }} className={styles.navLink}>
+            <Link
+              to={{ name: 'account' }}
+              className={clsx(
+                styles.navLink,
+                styles.userLink,
+                route.name === 'account' && styles.navLinkActive
+              )}
+            >
+              <span className={styles.avatar} aria-hidden>
+                {Array.from(user.name.trim())[0]?.toUpperCase() ?? '?'}
+              </span>
               <span className={styles.userName}>{user.name}</span>
               <span className={styles.brandName}> · </span>
               {pt('account')}
             </Link>
-            <button type="button" className={styles.linkButton} onClick={() => void logout()}>
+            <button type="button" className={styles.logout} onClick={() => void logout()}>
               {pt('logout')}
             </button>
           </div>
@@ -211,7 +221,7 @@ export const ErrorState = ({ message, onRetry }: { message: string; onRetry?: ()
 }
 
 export const Empty = ({ children }: { children: ReactNode }) => (
-  <div className={styles.center}>{children}</div>
+  <div className={clsx(styles.center, styles.empty)}>{children}</div>
 )
 
 export const Tabs = <T extends string>({
@@ -239,9 +249,26 @@ export const Tabs = <T extends string>({
   </div>
 )
 
-export const Stat = ({ value, label }: { value: ReactNode; label: ReactNode }) => (
+/** `progress` (0–1) adds a meter under the value, e.g. for "submitted / total" */
+export const Stat = ({
+  value,
+  label,
+  progress,
+}: {
+  value: ReactNode
+  label: ReactNode
+  progress?: number
+}) => (
   <div className={styles.stat}>
-    <div className={styles.statValue}>{value}</div>
     <div className={styles.statLabel}>{label}</div>
+    <div className={styles.statValue}>{value}</div>
+    {progress === undefined ? null : (
+      <div className={styles.statMeter}>
+        <div
+          className={styles.statMeterFill}
+          style={{ width: `${Math.round(Math.min(Math.max(progress, 0), 1) * 100)}%` }}
+        />
+      </div>
+    )}
   </div>
 )

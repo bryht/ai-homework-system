@@ -63,16 +63,17 @@ export const ClassesPage = () => {
         ) : (
           <div className={ui.cardGrid}>
             {data.classes.map((klass) => (
-              <a
-                key={klass.id}
-                href={`#/teacher/classes/${klass.id}`}
-                style={{ textDecoration: 'none', color: 'inherit' }}
-              >
-                <Card>
-                  <div className={ui.label} style={{ fontSize: 16 }}>
-                    {klass.name}
+              <a key={klass.id} href={`#/teacher/classes/${klass.id}`} className={ui.linkCard}>
+                <Card className={ui.classCard}>
+                  <span className={ui.classMark} aria-hidden>
+                    {Array.from(klass.name.trim())[0]?.toUpperCase() ?? '#'}
+                  </span>
+                  <div>
+                    <div className={ui.label} style={{ fontSize: 16 }}>
+                      {klass.name}
+                    </div>
+                    <div className={ui.muted}>{pt('studentCount', { n: klass.studentCount })}</div>
                   </div>
-                  <div className={ui.muted}>{pt('studentCount', { n: klass.studentCount })}</div>
                 </Card>
               </a>
             ))}
