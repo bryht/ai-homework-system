@@ -8,7 +8,7 @@ export type Route =
   | { name: 'login' }
   | { name: 'home' }
   | { name: 'account' }
-  | { name: 'chat'; homeworkId: string }
+  | { name: 'chat'; homeworkId: string; receipt?: boolean }
   | { name: 'classes' }
   | { name: 'class'; classId: string }
   | { name: 'homeworkNew' }
@@ -26,7 +26,7 @@ export const parseRoute = (hash: string): Route => {
     return { name: 'account' }
   }
   if (a === 'hw' && b) {
-    return { name: 'chat', homeworkId: b }
+    return { name: 'chat', homeworkId: b, receipt: c === 'submission' }
   }
   if (a === 'teacher') {
     if (b === 'classes' && c) {
@@ -60,7 +60,7 @@ export const routeHref = (route: Route): string => {
     case 'account':
       return '#/account'
     case 'chat':
-      return `#/hw/${route.homeworkId}`
+      return `#/hw/${route.homeworkId}${route.receipt ? '/submission' : ''}`
     case 'classes':
       return '#/teacher/classes'
     case 'class':
@@ -93,7 +93,7 @@ export const useRoute = (): Route => {
         (next.name === 'chat') !== (initialRoute.name === 'chat') ||
         (next.name === 'chat' &&
           initialRoute.name === 'chat' &&
-          next.homeworkId !== initialRoute.homeworkId)
+          (next.homeworkId !== initialRoute.homeworkId || next.receipt !== initialRoute.receipt))
       if (chatChanged) {
         window.location.reload()
         return

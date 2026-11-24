@@ -116,11 +116,13 @@ const HomeworkCard = ({ homework: hw }: { homework: StudentHomework }) => {
           size="m"
           variant={hw.phase === 'open' ? 'primary' : 'outlined'}
           disabled={hw.phase === 'upcoming'}
-          onClick={() => navigate({ name: 'chat', homeworkId: hw.id })}
+          onClick={() => navigate({ name: 'chat', homeworkId: hw.id, receipt: Boolean(hw.submission) })}
         >
-          {hw.phase === 'closed' && !hw.allowLateSubmission
-            ? pt('viewHomework')
-            : pt('enterHomework')}
+          {pt(
+            hw.submission ? 'viewSubmission' : hw.phase === 'closed' && !hw.allowLateSubmission
+              ? 'viewHomework'
+              : hw.phase === 'upcoming' ? 'viewAssignment' : 'enterHomework'
+          )}
         </Button>
       </div>
     </Card>

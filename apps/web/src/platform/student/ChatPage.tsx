@@ -11,7 +11,7 @@ import { ErrorState, Loading } from '../ui/components.js'
  * 作业聊天页：先取作业信息、设好作用域（请求头、IndexedDB 库名、功能开关），再挂载 chat-demo。
  * 每次页面加载只会进入一个作业，切换作业时整页刷新（见 router.ts）。
  */
-export const ChatPage = ({ homeworkId }: { homeworkId: string }) => {
+export const ChatPage = ({ homeworkId, showReceipt }: { homeworkId: string; showReceipt?: boolean }) => {
   const user = useSession((s) => s.user)
   const [state, setState] = useState<'loading' | 'ready' | string>('loading')
 
@@ -39,5 +39,5 @@ export const ChatPage = ({ homeworkId }: { homeworkId: string }) => {
   if (state !== 'ready') {
     return <ErrorState message={state} onRetry={() => navigate({ name: 'home' })} />
   }
-  return <App />
+  return <App showReceipt={showReceipt} />
 }

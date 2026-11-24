@@ -6,7 +6,7 @@ import { usePt } from '../i18n.js'
 import { routeHref } from '../router.js'
 import { useSession } from '../session.js'
 import { Badge, PhaseBadge } from '../ui/components.js'
-import { describeRemaining, formatDateTime } from '../ui/format.js'
+import { formatDateTime } from '../ui/format.js'
 import { HomeworkInfoDialog } from './HomeworkInfoDialog.js'
 import { SubmissionDialog } from './SubmissionDialog.js'
 import styles from './student.module.css'
@@ -14,11 +14,17 @@ import styles from './student.module.css'
 const isStudentView = (hw: StudentHomework | Homework): hw is StudentHomework => 'ai' in hw
 
 /** 聊天页顶部：返回、作业标题与剩余时间、「本对话会被老师查看」提示、作业要求和提交入口 */
-export const HomeworkBar = ({ showingInstructions = false }: { showingInstructions?: boolean }) => {
+export const HomeworkBar = ({
+  showingInstructions = false,
+  showReceipt = false,
+}: {
+  showingInstructions?: boolean
+  showReceipt?: boolean
+}) => {
   const pt = usePt()
   const homework = useHomeworkScope((s) => s.homework)
   const user = useSession((s) => s.user)
-  const [dialog, setDialog] = useState<'info' | 'submit' | 'receipt' | null>(null)
+  const [dialog, setDialog] = useState<'info' | 'submit' | 'receipt' | null>(showReceipt ? 'receipt' : null)
   if (!homework || !user) {
     return null
   }
@@ -29,13 +35,16 @@ export const HomeworkBar = ({ showingInstructions = false }: { showingInstructio
   return (
     <>
       <div className={styles.bar}>
-        <a className={styles.barBack} href={routeHref({ name: 'home' })}>
-          ← {pt('backToList')}
+        <a
+          className={styles.barBack}
+          href={routeHref(student ? { name: 'home' } : { name: 'homeworkEdit', homeworkId: homework.id })}
+        >
+          ← {pt(student ? 'backToList' : 'backToEditor')}
         </a>
         <div className={styles.barMain}>
           <div className={styles.barTitle}>
-            <span>{homework.title}</span>
-            <PhaseBadge phase={homework.phase} />
+            {showingInstructions ? null : <span className={styles.assignmentTitle}>{homework.title}</span>}
+            <PhaseBadge phase={homework.phase} draft={homework.status === 'draft'} />
             {student ? (
               <Badge
                 tone={
@@ -47,11 +56,9 @@ export const HomeworkBar = ({ showingInstructions = false }: { showingInstructio
             ) : null}
           </div>
           <div className={styles.barMeta}>
-            <span title={formatDateTime(homework.dueAt)}>
-              {homework.phase === 'closed'
-                ? pt('dueAt', { time: formatDateTime(homework.dueAt) })
-                : describeRemaining(homework.phase, homework.startAt, homework.dueAt, pt)}
-            </span>
+            {showingInstructions ? null : (
+              <span>{pt('dueAt', { time: formatDateTime(homework.dueAt) })}</span>
+            )}
             {student ? (
               <span className={styles.recorded}>
                 <span aria-hidden>●</span>
@@ -74,9 +81,9 @@ export const HomeworkBar = ({ showingInstructions = false }: { showingInstructio
                 {pt('viewSubmission')}
               </Button>
             ) : null}
-            {canSubmit ? (
-              <Button size="s" onClick={() => setDialog('submit')}>
-                {student.submission ? pt('resubmit') : pt('submitHomework')}
+            {canSubmit && !student.submission ? (
+              <Button variant="outlined" size="s" onClick={() => setDialog('submit')}>
+                {pt('submitHomework')}
               </Button>
             ) : null}
           </div>
@@ -88,11 +95,15 @@ export const HomeworkBar = ({ showingInstructions = false }: { showingInstructio
       {dialog === 'info' ? (
         <HomeworkInfoDialog homework={homework} onClose={() => setDialog(null)} />
       ) : null}
-      {(dialog === 'submit' || dialog === 'receipt') && student ? (
+      {student && ((dialog === 'submit' && canSubmit) || (dialog === 'receipt' && student.submission)) ? (
         <SubmissionDialog
           homework={student}
           userId={user.id}
+          key={dialog}
           readOnly={dialog === 'receipt'}
+          canEdit={Boolean(canSubmit)}
+          onEdit={() => setDialog('submit')}
+          onSubmitted={() => setDialog('receipt')}
           onClose={() => setDialog(null)}
         />
       ) : null}

@@ -30,13 +30,13 @@ import { useHomeworkScope } from '../platform/homeworkScope.js'
 import { usePt } from '../platform/i18n.js'
 import styles from './App.module.css'
 
-export const App = () => {
+export const App = ({ showReceipt = false }: { showReceipt?: boolean }) => {
   const t = useTranslate()
   const pt = usePt()
   const isMobile = useIsMobile()
   const homework = useHomeworkScope((state) => state.homework)
   const [briefOpen, setBriefOpen] = useState(true)
-  const instructionsHomework = briefOpen && homework && 'ai' in homework ? homework : null
+  const instructionsHomework = briefOpen ? homework : null
   // 移动端侧边栏以独立抽屉管理开合状态
   const siderCollapsed = useSettings((state) => state.siderCollapsed) && !isMobile
   const ready = useChatStore((state) => state.ready)
@@ -85,7 +85,7 @@ export const App = () => {
           <Sider />
         )}
         <main className={styles.main}>
-          <HomeworkBar showingInstructions={Boolean(instructionsHomework)} />
+          <HomeworkBar showingInstructions={Boolean(instructionsHomework)} showReceipt={showReceipt} />
           {saveError ? (
             <div className={styles.saveError} role="alert">
               <span>{t('sessionSaveFailed')}</span>
@@ -107,7 +107,7 @@ export const App = () => {
                   <h1>{instructionsHomework.title}</h1>
                   <HomeworkInstructions homework={instructionsHomework} />
                   <Button onClick={() => setBriefOpen(false)}>
-                    {pt(instructionsHomework.phase === 'closed' ? 'viewHomework' : 'askAi')}
+                    {pt('ai' in instructionsHomework && instructionsHomework.phase === 'closed' ? 'viewHomework' : 'askAi')}
                   </Button>
                 </section>
               </div>

@@ -8,7 +8,7 @@ import { Markdown } from '../../components/markdown/Markdown.js'
 import { api, downloadFile } from '../api.js'
 import { updateScopedHomework } from '../homeworkScope.js'
 import { usePt } from '../i18n.js'
-import { Checkbox, TextArea, ui } from '../ui/components.js'
+import { Checkbox, Field, TextArea, ui } from '../ui/components.js'
 import { formatBytes, formatDateTime } from '../ui/format.js'
 import styles from './student.module.css'
 
@@ -35,11 +35,17 @@ export const SubmissionDialog = ({
   homework,
   userId,
   readOnly,
+  canEdit,
+  onEdit,
+  onSubmitted,
   onClose,
 }: {
   homework: StudentHomework
   userId: string
   readOnly: boolean
+  canEdit: boolean
+  onEdit: () => void
+  onSubmitted: () => void
   onClose: () => void
 }) => {
   const pt = usePt()
@@ -132,7 +138,7 @@ export const SubmissionDialog = ({
       }
       updateScopedHomework({ ...homework, submission })
       showToast(pt('submitSuccess'))
-      onClose()
+      onSubmitted()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -144,15 +150,18 @@ export const SubmissionDialog = ({
   return (
     <>
       <Modal
-        title={readOnly ? pt('viewSubmission') : submission ? pt('resubmit') : pt('submitHomework')}
+        title={readOnly ? pt('submissionReceipt') : submission ? pt('resubmit') : pt('submitHomework')}
         closable
         className={styles.dialog}
         onClose={close}
         footer={
           readOnly ? (
-            <Button variant="outlined" onClick={close}>
-              {pt('close')}
-            </Button>
+            <>
+              <Button variant="outlined" onClick={close}>
+                {pt('close')}
+              </Button>
+              {canEdit ? <Button onClick={onEdit}>{pt('resubmit')}</Button> : null}
+            </>
           ) : (
             <>
               <Button variant="outlined" onClick={close} disabled={busy}>
@@ -170,6 +179,16 @@ export const SubmissionDialog = ({
             <div className={ui.muted}>
               {pt('lastSubmitted', { time: formatDateTime(submission.updatedAt) })}
               {submission.isLate ? ` · ${pt('lateTag')}` : ''}
+              {readOnly ? (
+                <div>
+                  {pt(
+                    !canEdit ? 'submissionEditsClosed' : homework.allowLateSubmission
+                      ? 'submissionEditsLate'
+                      : 'submissionEditsUntil',
+                    { time: formatDateTime(homework.dueAt) }
+                  )}
+                </div>
+              ) : null}
             </div>
           ) : null}
           {readOnly ? (
@@ -181,17 +200,22 @@ export const SubmissionDialog = ({
               className="ds-assistant-message-main-content"
             />
           ) : (
-            <TextArea
-              rows={10}
-              aria-label={pt('submission')}
-              placeholder={pt('submissionPlaceholder')}
-              value={content}
-              disabled={pending}
-              onChange={(e) => setContent(e.target.value)}
-              autoFocus
-            />
+            <Field label={pt('submission')}>
+              <TextArea
+                rows={10}
+                placeholder={pt('submissionPlaceholder')}
+                value={content}
+                disabled={pending}
+                onChange={(e) => setContent(e.target.value)}
+                autoFocus
+              />
+            </Field>
           )}
+          {readOnly ? <div>{pt('submissionFiles')}</div> : null}
           <div className={styles.fileList}>
+            {readOnly && files.length === 0 ? (
+              <span className={ui.muted}>{pt('noSubmissionFiles')}</span>
+            ) : null}
             {files.map((file) => (
               <span key={file.id} className={styles.fileItem}>
                 <a

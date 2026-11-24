@@ -4,6 +4,7 @@ import {
   type AiConfig,
   type ClassInfo,
   type Homework,
+  type HomeworkStatus,
   type ModelOption,
   type TeachingMode,
 } from '@hw/shared'
@@ -25,7 +26,7 @@ import {
   TitleRow,
   ui,
 } from '../ui/components.js'
-import { fromLocalInput, toLocalInput } from '../ui/format.js'
+import { formatDateTime, fromLocalInput, toLocalInput } from '../ui/format.js'
 import { useAsync } from '../ui/hooks.js'
 
 type Form = {
@@ -34,7 +35,6 @@ type Form = {
   description: string
   startAt: string
   dueAt: string
-  published: boolean
   allowLateSubmission: boolean
   aiConfig: AiConfig
   tokenBudgetText: string
@@ -61,7 +61,6 @@ const newForm = (classes: ClassInfo[], models: ModelOption[]): Form => {
     description: '',
     startAt: toLocalInput(start.toISOString()),
     dueAt: toLocalInput(due.toISOString()),
-    published: true,
     allowLateSubmission: false,
     aiConfig: { ...DEFAULT_AI_CONFIG, model },
     tokenBudgetText: String(DEFAULT_AI_CONFIG.tokenBudget ?? ''),
@@ -74,7 +73,6 @@ const fromHomework = (hw: Homework): Form => ({
   description: hw.description,
   startAt: toLocalInput(hw.startAt),
   dueAt: toLocalInput(hw.dueAt),
-  published: hw.status === 'published',
   allowLateSubmission: hw.allowLateSubmission,
   aiConfig: hw.aiConfig,
   tokenBudgetText: hw.aiConfig.tokenBudget === null ? '' : String(hw.aiConfig.tokenBudget),
@@ -96,6 +94,7 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
   const [pending, setPending] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [visibilityChange, setVisibilityChange] = useState<HomeworkStatus | null>(null)
 
   useEffect(() => {
     if (data && !form) {
@@ -115,19 +114,30 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
     setForm({ ...form, aiConfig: { ...form.aiConfig, [key]: value } })
 
   const model = data.models.find((m) => m.id === form.aiConfig.model)
+  const status = data.homework?.status ?? 'draft'
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const course = data.classes.find((item) => item.id === form.classId)?.name
+  const allowFileUpload = form.aiConfig.allowFileUpload && model?.supportsFiles !== false
+  const allowThinking = form.aiConfig.allowThinking && model?.supportsThinking !== false
   const webSearchUnavailable = model?.supportsWebSearch === false
   const allowWebSearch = form.aiConfig.allowWebSearch && !webSearchUnavailable
   const budget = form.tokenBudgetText.trim() === '' ? null : Number(form.tokenBudgetText)
   const budgetValid = budget === null || (Number.isInteger(budget) && budget > 0)
+  const datesValid = new Date(form.dueAt) > new Date(form.startAt)
   const valid =
     form.classId &&
     form.title.trim() &&
     form.startAt &&
     form.dueAt &&
-    form.aiConfig.model &&
+    datesValid &&
+    model &&
     budgetValid
 
-  const save = async () => {
+  const save = async (nextStatus = status, preview = false) => {
+    if (pending || !valid) {
+      return
+    }
+
     setPending(true)
     setSaveError(null)
     const payload = {
@@ -135,9 +145,9 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
       description: form.description,
       startAt: fromLocalInput(form.startAt),
       dueAt: fromLocalInput(form.dueAt),
-      status: form.published ? 'published' : 'draft',
+      status: nextStatus,
       allowLateSubmission: form.allowLateSubmission,
-      aiConfig: { ...form.aiConfig, allowWebSearch, tokenBudget: budget },
+      aiConfig: { ...form.aiConfig, allowFileUpload, allowThinking, allowWebSearch, tokenBudget: budget },
     }
     try {
       const { homework } = homeworkId
@@ -149,8 +159,9 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
             method: 'POST',
             json: { ...payload, classId: form.classId },
           })
-      navigate({ name: 'homework', homeworkId: homework.id })
+      navigate({ name: preview ? 'chat' : 'homework', homeworkId: homework.id })
     } catch (e) {
+      setVisibilityChange(null)
       setSaveError(e instanceof Error ? e.message : String(e))
     } finally {
       setPending(false)
@@ -212,9 +223,10 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
                 onChange={(e) => set('startAt', e.target.value)}
               />
             </Field>
-            <Field label={pt('dueAt2')}>
+            <Field label={pt('dueAt2')} hint={timeZone}>
               <TextInput
                 type="datetime-local"
+                aria-invalid={!datesValid}
                 value={form.dueAt}
                 onChange={(e) => set('dueAt', e.target.value)}
               />
@@ -228,11 +240,7 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
             </Field>
             <div className={ui.span2}>
               <div className={ui.stack} style={{ gap: 8 }}>
-                <Checkbox
-                  checked={form.published}
-                  onChange={(v) => set('published', v)}
-                  label={pt('publishNow')}
-                />
+                {!datesValid ? <div className={ui.error}>{pt('dueAfterStart')}</div> : null}
                 <Checkbox
                   checked={form.allowLateSubmission}
                   onChange={(v) => set('allowLateSubmission', v)}
@@ -297,13 +305,13 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
             <div className={ui.span2}>
               <div className={ui.stack} style={{ gap: 8 }}>
                 <Checkbox
-                  checked={form.aiConfig.allowFileUpload}
+                  checked={allowFileUpload}
                   onChange={(v) => setAi('allowFileUpload', v)}
                   label={pt('allowFileUpload')}
                   disabled={model ? !model.supportsFiles : false}
                 />
                 <Checkbox
-                  checked={form.aiConfig.allowThinking}
+                  checked={allowThinking}
                   onChange={(v) => setAi('allowThinking', v)}
                   label={pt('allowThinking')}
                   disabled={model ? !model.supportsThinking : false}
@@ -330,11 +338,30 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
             </Field>
           </div>
         </Card>
-        {saveError ? <div className={ui.error}>{saveError}</div> : null}
+        {saveError ? <div className={ui.error} role="alert">{saveError}</div> : null}
         <div className={ui.row}>
-          <Button type="submit" disabled={pending || !valid}>
-            {pt('save')}
+          <Button type="submit" variant={status === 'draft' ? 'outlined' : 'primary'} disabled={pending || !valid}>
+            {pt(status === 'draft' ? 'saveDraft' : 'saveChanges')}
           </Button>
+          {status === 'draft' ? (
+            <>
+              <Button variant="outlined" disabled={pending || !valid} onClick={() => void save('draft', true)}>
+                {pt('saveDraftAndPreview')}
+              </Button>
+              <Button disabled={pending || !valid} onClick={() => setVisibilityChange('published')}>
+                {pt('publishAssignment')}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outlined" disabled={pending} onClick={() => homeworkId && navigate({ name: 'chat', homeworkId })}>
+                {pt('previewSavedAssignment')}
+              </Button>
+              <Button variant="outlined" disabled={pending || !valid} onClick={() => setVisibilityChange('draft')}>
+                {pt('unpublishAssignment')}
+              </Button>
+            </>
+          )}
           <Button variant="outlined" onClick={() => window.history.back()}>
             {pt('cancel')}
           </Button>
@@ -345,6 +372,42 @@ export const HomeworkEditor = ({ homeworkId }: { homeworkId?: string }) => {
           ) : null}
         </div>
       </form>
+      {visibilityChange ? (
+        <Modal
+          title={pt(visibilityChange === 'published' ? 'publishAssignment' : 'unpublishAssignment')}
+          onClose={() => !pending && setVisibilityChange(null)}
+          footer={
+            <>
+              <Button variant="outlined" disabled={pending} onClick={() => setVisibilityChange(null)}>
+                {pt('cancel')}
+              </Button>
+              <Button disabled={pending} onClick={() => void save(visibilityChange)}>
+                {pt(visibilityChange === 'published' ? 'publishAssignment' : 'unpublishAssignment')}
+              </Button>
+            </>
+          }
+        >
+          {visibilityChange === 'published' ? (
+            <div className={ui.stack}>
+              <p>{pt('publishConfirm', { title: form.title.trim(), course: course ?? '' })}</p>
+              <div>{pt('startsAt', { time: formatDateTime(fromLocalInput(form.startAt)) })}</div>
+              <div>{pt('dueAt', { time: formatDateTime(fromLocalInput(form.dueAt)) })} ({timeZone})</div>
+              <div>
+                {pt('enabledAiCapabilities', {
+                  model: model?.label ?? form.aiConfig.model,
+                  capabilities: [
+                    allowFileUpload && pt('fileUploadCapability'),
+                    allowThinking && pt('thinkingCapability'),
+                    allowWebSearch && pt('searchCapability'),
+                  ].filter(Boolean).join(', ') || pt('noAiCapabilities'),
+                })}
+              </div>
+            </div>
+          ) : (
+            <p>{pt('unpublishConfirm')}</p>
+          )}
+        </Modal>
+      ) : null}
       {deleteOpen ? (
         <Modal
           title={pt('deleteHomework')}

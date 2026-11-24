@@ -39,7 +39,7 @@ export const Platform = () => {
     return <LoginPage />
   }
   if (route.name === 'chat') {
-    return <ChatPage homeworkId={route.homeworkId} />
+    return <ChatPage homeworkId={route.homeworkId} showReceipt={route.receipt} />
   }
 
   const teacher = user.role === 'teacher'
@@ -58,7 +58,7 @@ export const Platform = () => {
       page = teacher ? <HomeworkEditor /> : null
       break
     case 'homeworkEdit':
-      page = teacher ? <HomeworkEditor homeworkId={route.homeworkId} /> : null
+      page = teacher ? <HomeworkEditor key={route.homeworkId} homeworkId={route.homeworkId} /> : null
       break
     case 'homework':
       page = teacher ? (
