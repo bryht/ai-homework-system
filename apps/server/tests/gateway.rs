@@ -181,7 +181,26 @@ async fn infers_regenerate_edit_and_continue(db: PgPool) {
 }
 
 #[sqlx::test]
-async fn records_aborted_turns_when_the_student_stops(db: PgPool) {
+async fn archives_completion_before_sending_message_stop(db: PgPool) {
+    let ctx = Ctx::new(db.clone());
+    let s = ctx.setup_class(ai_config()).await;
+    let response = ctx
+        .send(ctx.chat_request(&s.student1, &s.homework_id, "u1", None, json!([{ "role": "user", "content": "hi" }])))
+        .await;
+    let mut body = response.into_body();
+    while let Some(frame) = body.frame().await {
+        let data = frame.unwrap().into_data().unwrap();
+        if String::from_utf8_lossy(&data).contains("event: message_stop") {
+            drop(body);
+            assert_eq!(turns(&db).await[0].status, "ok");
+            return;
+        }
+    }
+    panic!("missing message_stop event");
+}
+
+#[sqlx::test]
+async fn records_aborted_turns_when_a_client_disconnects(db: PgPool) {
     let ctx = Ctx::new(db.clone());
     let s = ctx.setup_class(ai_config()).await;
     let response = ctx
@@ -197,6 +216,37 @@ async fn records_aborted_turns_when_the_student_stops(db: PgPool) {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
     panic!("turn was not recorded as aborted: {:?}", turns(&db).await);
+}
+
+#[sqlx::test]
+async fn records_an_explicit_stop_separately_from_disconnect(db: PgPool) {
+    let ctx = Ctx::new(db.clone());
+    let s = ctx.setup_class(ai_config()).await;
+    let mut request =
+        ctx.chat_request(&s.student1, &s.homework_id, "u1", None, json!([{ "role": "user", "content": "hi" }]));
+    *request.uri_mut() = "/anthropic/v1/messages?request_id=attempt-one".parse().unwrap();
+    let mut body = ctx.send(request).await.into_body();
+    body.frame().await.unwrap().unwrap();
+    let stop = ctx
+        .call(
+            Method::POST,
+            "/anthropic/v1/messages/stop?request_id=attempt-one",
+            Some(&s.student1),
+            None,
+            &[("x-hw-homework-id", &s.homework_id)],
+        )
+        .await;
+    assert_eq!(stop.status, StatusCode::OK);
+    drop(body);
+    for _ in 0..50 {
+        let saved = turns(&db).await;
+        if saved[0].status == "aborted" {
+            assert_eq!(saved[0].stop_reason.as_deref(), Some("user_stop"));
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    panic!("explicit stop was not archived");
 }
 
 #[sqlx::test]

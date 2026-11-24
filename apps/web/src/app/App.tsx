@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslate } from '../i18n/index.js'
 import { useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
@@ -25,11 +25,18 @@ import { CollapsedSider } from '../components/sider/CollapsedSider.js'
 import { closeMobileSider } from '../components/sider/mobileSiderState.js'
 import { MobileSider, Sider } from '../components/sider/Sider.js'
 import { HomeworkBar } from '../platform/student/HomeworkBar.js'
+import { HomeworkInstructions } from '../platform/student/HomeworkInfoDialog.js'
+import { useHomeworkScope } from '../platform/homeworkScope.js'
+import { usePt } from '../platform/i18n.js'
 import styles from './App.module.css'
 
 export const App = () => {
   const t = useTranslate()
+  const pt = usePt()
   const isMobile = useIsMobile()
+  const homework = useHomeworkScope((state) => state.homework)
+  const [briefOpen, setBriefOpen] = useState(true)
+  const instructionsHomework = briefOpen && homework && 'ai' in homework ? homework : null
   // 移动端侧边栏以独立抽屉管理开合状态
   const siderCollapsed = useSettings((state) => state.siderCollapsed) && !isMobile
   const ready = useChatStore((state) => state.ready)
@@ -72,9 +79,13 @@ export const App = () => {
   return (
     <>
       <div ref={frameRef} className={styles.frame}>
-        {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
+        {instructionsHomework ? null : isMobile ? (
+          <MobileSider />
+        ) : siderCollapsed ? null : (
+          <Sider />
+        )}
         <main className={styles.main}>
-          <HomeworkBar />
+          <HomeworkBar showingInstructions={Boolean(instructionsHomework)} />
           {saveError ? (
             <div className={styles.saveError} role="alert">
               <span>{t('sessionSaveFailed')}</span>
@@ -89,8 +100,18 @@ export const App = () => {
             </div>
           ) : null}
           <div className={styles.content}>
-            {siderCollapsed ? <CollapsedSider /> : null}
-            {!ready || (activeId !== null && !session) ? (
+            {siderCollapsed && !instructionsHomework ? <CollapsedSider /> : null}
+            {instructionsHomework ? (
+              <div className={styles.briefView}>
+                <section className={styles.brief}>
+                  <h1>{instructionsHomework.title}</h1>
+                  <HomeworkInstructions homework={instructionsHomework} />
+                  <Button onClick={() => setBriefOpen(false)}>
+                    {pt(instructionsHomework.phase === 'closed' ? 'viewHomework' : 'askAi')}
+                  </Button>
+                </section>
+              </div>
+            ) : !ready || (activeId !== null && !session) ? (
               <div className={styles.loadingView}>
                 {isMobile ? <MobileHeader /> : null}
                 <div className={styles.loadingState} role="status" aria-live="polite">

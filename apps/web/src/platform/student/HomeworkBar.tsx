@@ -5,7 +5,7 @@ import { useHomeworkScope } from '../homeworkScope.js'
 import { usePt } from '../i18n.js'
 import { routeHref } from '../router.js'
 import { useSession } from '../session.js'
-import { PhaseBadge } from '../ui/components.js'
+import { Badge, PhaseBadge } from '../ui/components.js'
 import { describeRemaining, formatDateTime } from '../ui/format.js'
 import { HomeworkInfoDialog } from './HomeworkInfoDialog.js'
 import { SubmissionDialog } from './SubmissionDialog.js'
@@ -14,11 +14,11 @@ import styles from './student.module.css'
 const isStudentView = (hw: StudentHomework | Homework): hw is StudentHomework => 'ai' in hw
 
 /** 聊天页顶部：返回、作业标题与剩余时间、「本对话会被老师查看」提示、作业要求和提交入口 */
-export const HomeworkBar = () => {
+export const HomeworkBar = ({ showingInstructions = false }: { showingInstructions?: boolean }) => {
   const pt = usePt()
   const homework = useHomeworkScope((s) => s.homework)
   const user = useSession((s) => s.user)
-  const [dialog, setDialog] = useState<'info' | 'submit' | null>(null)
+  const [dialog, setDialog] = useState<'info' | 'submit' | 'receipt' | null>(null)
   if (!homework || !user) {
     return null
   }
@@ -36,6 +36,15 @@ export const HomeworkBar = () => {
           <div className={styles.barTitle}>
             <span>{homework.title}</span>
             <PhaseBadge phase={homework.phase} />
+            {student ? (
+              <Badge
+                tone={
+                  student.submission ? (student.submission.isLate ? 'warn' : 'open') : 'neutral'
+                }
+              >
+                {pt(student.submission ? 'submitted' : 'notSubmitted')}
+              </Badge>
+            ) : null}
           </div>
           <div className={styles.barMeta}>
             <span title={formatDateTime(homework.dueAt)}>
@@ -53,16 +62,25 @@ export const HomeworkBar = () => {
             )}
           </div>
         </div>
-        <div className={styles.barActions}>
-          <Button variant="outlined" size="s" onClick={() => setDialog('info')}>
-            {pt('homeworkInstructions')}
-          </Button>
-          {canSubmit ? (
-            <Button size="s" onClick={() => setDialog('submit')}>
-              {student.submission ? pt('resubmit') : pt('submitHomework')}
-            </Button>
-          ) : null}
-        </div>
+        {!showingInstructions || student?.submission || canSubmit ? (
+          <div className={styles.barActions}>
+            {showingInstructions ? null : (
+              <Button variant="outlined" size="s" onClick={() => setDialog('info')}>
+                {pt('homeworkInstructions')}
+              </Button>
+            )}
+            {student?.submission ? (
+              <Button variant="outlined" size="s" onClick={() => setDialog('receipt')}>
+                {pt('viewSubmission')}
+              </Button>
+            ) : null}
+            {canSubmit ? (
+              <Button size="s" onClick={() => setDialog('submit')}>
+                {student.submission ? pt('resubmit') : pt('submitHomework')}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {student && homework.phase === 'closed' ? (
         <div className={styles.banner}>{pt('closedNotice')}</div>
@@ -70,8 +88,13 @@ export const HomeworkBar = () => {
       {dialog === 'info' ? (
         <HomeworkInfoDialog homework={homework} onClose={() => setDialog(null)} />
       ) : null}
-      {dialog === 'submit' && student ? (
-        <SubmissionDialog homework={student} onClose={() => setDialog(null)} />
+      {(dialog === 'submit' || dialog === 'receipt') && student ? (
+        <SubmissionDialog
+          homework={student}
+          userId={user.id}
+          readOnly={dialog === 'receipt'}
+          onClose={() => setDialog(null)}
+        />
       ) : null}
     </>
   )

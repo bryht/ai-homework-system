@@ -1,9 +1,10 @@
-import type { HomeworkOverview } from '@hw/shared'
+import type { HomeworkOverview, StudentProgress } from '@hw/shared'
+import { useState } from 'react'
 import { Button } from '../../components/base/Button.js'
 import { showToast } from '../../components/base/toastState.js'
 import { api, downloadFile } from '../api.js'
 import { usePt } from '../i18n.js'
-import { navigate } from '../router.js'
+import { navigate, routeHref } from '../router.js'
 import {
   Badge,
   Empty,
@@ -11,14 +12,21 @@ import {
   Loading,
   PhaseBadge,
   Stat,
+  Tabs,
   TitleRow,
   ui,
 } from '../ui/components.js'
 import { formatDateTime, formatNumber } from '../ui/format.js'
 import { useAsync } from '../ui/hooks.js'
 
+type StudentFilter = 'allStudents' | 'toGrade' | 'notSubmitted' | 'graded'
+
+const reviewStatus = (row: StudentProgress): Exclude<StudentFilter, 'allStudents'> =>
+  row.submission ? (row.grade ? 'graded' : 'toGrade') : 'notSubmitted'
+
 export const HomeworkOverviewPage = ({ homeworkId }: { homeworkId: string }) => {
   const pt = usePt()
+  const [filter, setFilter] = useState<StudentFilter>('allStudents')
   const { data, error, reload } = useAsync(
     () => api<HomeworkOverview>(`/api/homeworks/${homeworkId}/overview`),
     [homeworkId]
@@ -34,6 +42,9 @@ export const HomeworkOverviewPage = ({ homeworkId }: { homeworkId: string }) => 
   const submitted = students.filter((s) => s.submission).length
   const active = students.filter((s) => s.turns > 0).length
   const turns = students.reduce((sum, s) => sum + s.turns, 0)
+  const visible =
+    filter === 'allStudents' ? students : students.filter((row) => reviewStatus(row) === filter)
+  const filters: StudentFilter[] = ['allStudents', 'toGrade', 'notSubmitted', 'graded']
   return (
     <>
       <TitleRow
@@ -93,8 +104,16 @@ export const HomeworkOverviewPage = ({ homeworkId }: { homeworkId: string }) => 
         />
         <Stat value={formatNumber(turns)} label={pt('colTurns')} />
       </div>
-      {total === 0 ? (
-        <Empty>—</Empty>
+      <Tabs
+        value={filter}
+        onChange={setFilter}
+        options={filters.map((value) => ({
+          value,
+          label: `${pt(value)} (${value === 'allStudents' ? total : students.filter((row) => reviewStatus(row) === value).length})`,
+        }))}
+      />
+      {visible.length === 0 ? (
+        <Empty>{pt('noMatchingStudents')}</Empty>
       ) : (
         <div className={ui.tableWrap}>
           <table className={ui.table}>
@@ -110,7 +129,7 @@ export const HomeworkOverviewPage = ({ homeworkId }: { homeworkId: string }) => 
               </tr>
             </thead>
             <tbody>
-              {students.map((row) => (
+              {visible.map((row) => (
                 <tr
                   key={row.student.id}
                   className={ui.clickableRow}
@@ -120,7 +139,7 @@ export const HomeworkOverviewPage = ({ homeworkId }: { homeworkId: string }) => 
                 >
                   <td>
                     <a
-                      href={`#/teacher/hw/${homeworkId}/students/${row.student.id}`}
+                      href={routeHref({ name: 'student', homeworkId, studentId: row.student.id })}
                       onClick={(e) => e.stopPropagation()}
                     >
                       {row.student.name}

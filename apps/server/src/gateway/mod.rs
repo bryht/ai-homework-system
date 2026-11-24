@@ -21,7 +21,7 @@ use accumulate::MessageAccumulator;
 use axum::{
     Json, Router,
     body::{Body, Bytes},
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{delete, post},
@@ -29,6 +29,7 @@ use axum::{
 use futures::StreamExt;
 use policy::{build_upstream_request, collect_file_ids, last_user_index, to_blocks};
 use providers::{Provider, Upstream, UpstreamError, UpstreamFile};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use sse::SseParser;
 use std::{collections::HashMap, sync::Arc, time::Instant};
@@ -42,6 +43,7 @@ pub const ASSISTANT_MESSAGE_HEADER: &str = "x-hw-assistant-message-id";
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/messages", post(messages))
+        .route("/messages/stop", post(record_stop))
         .route("/files", post(upload_file))
         .route("/files/{id}", delete(delete_file))
 }
@@ -185,8 +187,7 @@ async fn infer_kind(
     Ok(if sibling { "edit" } else { "new" })
 }
 
-/// Archives one turn. If the browser disconnects (the student pressed stop or closed the page),
-/// the response stream is dropped and `Drop` records the turn as aborted.
+/// Archives one turn. Disconnects before a terminal event are recorded as interrupted.
 struct Recorder {
     state: AppState,
     turn_id: String,
@@ -232,7 +233,9 @@ impl Recorder {
 
     /// Final status once the upstream stream has ended normally.
     fn completed(&mut self) -> TurnResult {
-        if self.acc.done || self.acc.stop_reason.is_some() {
+        if self.acc.error.is_some() {
+            self.result("error", None)
+        } else if self.acc.done || self.acc.stop_reason.is_some() {
             self.result("ok", None)
         } else {
             let error = self.acc.error.clone().unwrap_or_else(|| "stream ended before message_stop".into());
@@ -244,7 +247,9 @@ impl Recorder {
         let now = state.clock.now();
         let saved = sqlx::query(
             "UPDATE turns SET status = $2, error = $3, assistant_content = $4, input_tokens = $5, output_tokens = $6, \
-             stop_reason = $7, latency_ms = $8, completed_at = $9 WHERE id = $1",
+             stop_reason = CASE WHEN $2 = 'aborted' AND request_meta->>'stoppedByUser' = 'true' \
+                                THEN 'user_stop' ELSE $7 END, \
+             latency_ms = $8, completed_at = $9 WHERE id = $1",
         )
         .bind(&turn_id)
         .bind(r.status)
@@ -270,7 +275,16 @@ impl Recorder {
     }
 
     async fn finish(&mut self, result: TurnResult) {
-        Self::save(self.state.clone(), self.turn_id.clone(), self.conversation_id.clone(), result).await;
+        // Keep saving if the browser drops the response while the database write is in flight.
+        let save = tokio::spawn(Self::save(
+            self.state.clone(),
+            self.turn_id.clone(),
+            self.conversation_id.clone(),
+            result,
+        ));
+        if let Err(error) = save.await {
+            tracing::error!("failed to finish turn {}: {error}", self.turn_id);
+        }
     }
 }
 
@@ -283,9 +297,42 @@ impl Drop for Recorder {
     }
 }
 
+#[derive(Deserialize)]
+struct ChatQuery {
+    request_id: Option<String>,
+}
+
+async fn record_stop(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Query(query): Query<ChatQuery>,
+    headers: HeaderMap,
+) -> AppResult<impl IntoResponse> {
+    let Some(homework_id) = header_value(&headers, HOMEWORK_HEADER) else {
+        return Err(AppError::bad_request("Missing homework"));
+    };
+    let Some(request_id) = query.request_id.filter(|id| !id.is_empty() && id.len() <= 128) else {
+        return Err(AppError::bad_request("Missing or invalid request ID"));
+    };
+    load_homework_for(&state, &homework_id, &user).await?;
+    sqlx::query(
+        "UPDATE turns SET request_meta = request_meta || jsonb_build_object('stoppedByUser', true), \
+         stop_reason = CASE WHEN status = 'aborted' THEN 'user_stop' ELSE stop_reason END \
+         WHERE homework_id = $1 AND user_id = $2 AND request_meta->>'clientRequestId' = $3 \
+         AND status IN ('streaming', 'aborted')",
+    )
+    .bind(homework_id)
+    .bind(user.id)
+    .bind(request_id)
+    .execute(&state.db)
+    .await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
 async fn messages(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
+    Query(query): Query<ChatQuery>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, GatewayError> {
@@ -366,6 +413,7 @@ async fn messages(
         "thinking": upstream_body["thinking"]["type"] == "enabled",
         "webSearch": upstream_body["tools"].as_array().is_some_and(|t| !t.is_empty()),
         "preview": access.is_teacher,
+        "clientRequestId": query.request_id.filter(|id| !id.is_empty() && id.len() <= 128),
     })))
     .bind(now)
     .execute(&state.db)
@@ -417,6 +465,13 @@ async fn messages(
             match stream.next().await {
                 Some(Ok(chunk)) => {
                     recorder.feed(&chunk);
+                    if recorder.acc.done || recorder.acc.error.is_some() {
+                        // Browsers may close the connection immediately after the terminal event.
+                        let result = recorder.completed();
+                        recorder.finish(result).await;
+                        yield Ok::<Bytes, std::io::Error>(chunk);
+                        break;
+                    }
                     yield Ok::<Bytes, std::io::Error>(chunk);
                 }
                 Some(Err(e)) => {

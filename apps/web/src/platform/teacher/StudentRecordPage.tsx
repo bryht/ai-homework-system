@@ -1,10 +1,11 @@
-import type { Grade, StudentRecord } from '@hw/shared'
+import type { Grade, HomeworkOverview, StudentRecord } from '@hw/shared'
 import { useEffect, useState } from 'react'
 import { Button } from '../../components/base/Button.js'
 import { showToast } from '../../components/base/toastState.js'
 import { Markdown } from '../../components/markdown/Markdown.js'
 import { api } from '../api.js'
 import { usePt } from '../i18n.js'
+import { navigate } from '../router.js'
 import {
   Badge,
   Card,
@@ -35,7 +36,7 @@ export const StudentRecordPage = ({
     () => api<StudentRecord>(`/api/homeworks/${homeworkId}/students/${studentId}`),
     [homeworkId, studentId]
   )
-  const [tab, setTab] = useState<'conversations' | 'submission'>('conversations')
+  const [selectedTab, setTab] = useState<'conversations' | 'submission' | null>(null)
 
   if (error) {
     return <ErrorState message={error} onRetry={reload} />
@@ -44,6 +45,7 @@ export const StudentRecordPage = ({
     return <Loading />
   }
   const { student, homework, conversations, submission } = data
+  const tab = selectedTab ?? (submission ? 'submission' : 'conversations')
   const turnCount = conversations.reduce((n, c) => n + c.turns.length, 0)
   return (
     <>
@@ -103,7 +105,12 @@ export const StudentRecordPage = ({
           )}
         </div>
         <div className={styles.side}>
-          <GradeCard homeworkId={homeworkId} studentId={studentId} grade={data.grade} />
+          <GradeCard
+            homeworkId={homeworkId}
+            studentId={studentId}
+            grade={data.grade}
+            hasSubmission={Boolean(submission)}
+          />
         </div>
       </div>
     </>
@@ -114,10 +121,12 @@ const GradeCard = ({
   homeworkId,
   studentId,
   grade,
+  hasSubmission,
 }: {
   homeworkId: string
   studentId: string
   grade: Grade | null
+  hasSubmission: boolean
 }) => {
   const pt = usePt()
   const [score, setScore] = useState(
@@ -132,18 +141,37 @@ const GradeCard = ({
     setSavedAt(grade?.gradedAt ?? null)
   }, [grade])
 
-  const save = async () => {
+  const scoreValue = score.trim() === '' ? null : Number(score)
+  const scoreValid =
+    scoreValue === null || (Number.isFinite(scoreValue) && scoreValue >= 0 && scoreValue <= 1000)
+
+  const save = async (nextStudent = false) => {
+    if (pending || !scoreValid) {
+      return
+    }
     setPending(true)
     try {
       const result = await api<{ grade: Grade }>(
         `/api/homeworks/${homeworkId}/students/${studentId}/grade`,
         {
           method: 'PUT',
-          json: { score: score.trim() === '' ? null : Number(score), comment },
+          json: { score: scoreValue, comment },
         }
       )
       setSavedAt(result.grade.gradedAt)
       showToast(pt('saved'))
+      if (nextStudent) {
+        const { students } = await api<HomeworkOverview>(`/api/homeworks/${homeworkId}/overview`)
+        const current = students.findIndex((row) => row.student.id === studentId)
+        const remaining = [...students.slice(current + 1), ...students.slice(0, current)]
+        const next = remaining.find((row) => row.submission && !row.grade)
+        if (next) {
+          navigate({ name: 'student', homeworkId, studentId: next.student.id })
+        } else {
+          showToast(pt('noMoreToGrade'))
+          navigate({ name: 'homework', homeworkId })
+        }
+      }
     } catch (e) {
       showToast(e instanceof Error ? e.message : String(e))
     } finally {
@@ -151,7 +179,6 @@ const GradeCard = ({
     }
   }
 
-  const scoreValid = score.trim() === '' || (!Number.isNaN(Number(score)) && Number(score) >= 0)
   return (
     <Card>
       <form
@@ -165,19 +192,41 @@ const GradeCard = ({
           {pt('grade')}
         </h2>
         <Field label={pt('score')}>
-          <TextInput inputMode="decimal" value={score} onChange={(e) => setScore(e.target.value)} />
+          <TextInput
+            inputMode="decimal"
+            value={score}
+            disabled={pending}
+            onChange={(e) => setScore(e.target.value)}
+          />
         </Field>
         <Field label={pt('comment')}>
-          <TextArea rows={6} value={comment} onChange={(e) => setComment(e.target.value)} />
+          <TextArea
+            rows={6}
+            value={comment}
+            disabled={pending}
+            onChange={(e) => setComment(e.target.value)}
+          />
         </Field>
         {savedAt ? (
           <div className={`${ui.muted} ${ui.small}`}>
             {pt('gradedAt', { time: formatDateTime(savedAt) })}
           </div>
         ) : null}
-        <Button type="submit" size="m" disabled={pending || !scoreValid}>
-          {pt('saveGrade')}
-        </Button>
+        <div className={ui.row}>
+          <Button
+            type="submit"
+            size="m"
+            variant={hasSubmission ? 'outlined' : 'primary'}
+            disabled={pending || !scoreValid}
+          >
+            {pt('saveGrade')}
+          </Button>
+          {hasSubmission ? (
+            <Button size="m" onClick={() => void save(true)} disabled={pending || !scoreValid}>
+              {pt('saveAndNext')}
+            </Button>
+          ) : null}
+        </div>
       </form>
     </Card>
   )

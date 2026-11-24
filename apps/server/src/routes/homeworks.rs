@@ -28,7 +28,7 @@ use std::collections::{HashMap, HashSet};
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list).post(create))
-        .route("/{id}", get(detail).patch(update))
+        .route("/{id}", get(detail).patch(update).delete(remove))
         .route("/{id}/overview", get(overview))
         .route("/{id}/export.csv", get(export_csv))
         .route("/{id}/students/{student_id}", get(student_record))
@@ -220,6 +220,25 @@ async fn update(
     .fetch_one(&state.db)
     .await?;
     Ok(Json(json!({ "homework": to_homework(&row, &access.class.name, now) })))
+}
+
+async fn remove(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<String>,
+) -> AppResult<impl IntoResponse> {
+    let teacher = user.require(Role::Teacher)?;
+    let result = sqlx::query(
+        "DELETE FROM homeworks h USING classes c WHERE h.id = $1 AND c.id = h.class_id AND c.teacher_id = $2",
+    )
+    .bind(id)
+    .bind(teacher.id)
+    .execute(&state.db)
+    .await?;
+    if result.rows_affected() == 0 {
+        return Err(AppError::not_found("Homework not found"));
+    }
+    Ok(Json(json!({ "ok": true })))
 }
 
 async fn all_submissions(state: &AppState, homework_id: &str) -> AppResult<HashMap<String, SubmissionRow>> {

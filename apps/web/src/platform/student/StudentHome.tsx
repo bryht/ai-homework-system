@@ -17,6 +17,23 @@ import { describeRemaining, formatDateTime, formatNumber } from '../ui/format.js
 import { useAsync } from '../ui/hooks.js'
 import styles from './student.module.css'
 
+type HomeworkGroup = 'toDo' | 'upcomingHomework' | 'submitted' | 'closedHomework'
+
+const groupOf = (hw: StudentHomework): HomeworkGroup => {
+  if (hw.submission) {
+    return 'submitted'
+  }
+  if (hw.phase === 'upcoming') {
+    return 'upcomingHomework'
+  }
+  if (hw.phase === 'closed' && !hw.allowLateSubmission) {
+    return 'closedHomework'
+  }
+  return 'toDo'
+}
+
+const groups: HomeworkGroup[] = ['toDo', 'upcomingHomework', 'submitted', 'closedHomework']
+
 export const StudentHome = () => {
   const pt = usePt()
   const { data, error, reload } = useAsync(
@@ -34,10 +51,26 @@ export const StudentHome = () => {
       ) : data.homeworks.length === 0 ? (
         <Empty>{pt('noHomework')}</Empty>
       ) : (
-        <div className={ui.cardGrid}>
-          {data.homeworks.map((hw) => (
-            <HomeworkCard key={hw.id} homework={hw} />
-          ))}
+        <div className={ui.stack}>
+          {groups.map((group) => {
+            const homeworks = data.homeworks
+              .filter((homework) => groupOf(homework) === group)
+              .sort((a, b) =>
+                group === 'toDo' || group === 'upcomingHomework'
+                  ? a.dueAt.localeCompare(b.dueAt)
+                  : b.dueAt.localeCompare(a.dueAt)
+              )
+            return homeworks.length ? (
+              <section key={group}>
+                <h2 className={ui.sectionTitle}>{pt(group)}</h2>
+                <div className={ui.cardGrid}>
+                  {homeworks.map((hw) => (
+                    <HomeworkCard key={hw.id} homework={hw} />
+                  ))}
+                </div>
+              </section>
+            ) : null
+          })}
         </div>
       )}
     </>
@@ -61,7 +94,7 @@ const HomeworkCard = ({ homework: hw }: { homework: StudentHomework }) => {
         )}
         <span className={ui.muted}>{hw.className}</span>
       </div>
-      <h2 className={styles.cardTitle}>{hw.title}</h2>
+      <h3 className={styles.cardTitle}>{hw.title}</h3>
       <div className={styles.cardMeta}>
         <div>{pt('dueAt', { time: formatDateTime(hw.dueAt) })}</div>
         {hw.phase === 'upcoming' ? (
@@ -85,7 +118,9 @@ const HomeworkCard = ({ homework: hw }: { homework: StudentHomework }) => {
           disabled={hw.phase === 'upcoming'}
           onClick={() => navigate({ name: 'chat', homeworkId: hw.id })}
         >
-          {hw.phase === 'closed' ? pt('viewHomework') : pt('enterHomework')}
+          {hw.phase === 'closed' && !hw.allowLateSubmission
+            ? pt('viewHomework')
+            : pt('enterHomework')}
         </Button>
       </div>
     </Card>
